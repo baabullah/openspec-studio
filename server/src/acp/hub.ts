@@ -214,7 +214,9 @@ export class AgentSession {
   }
 
   async setConfig(configId: string, value: string | boolean) {
-    const r: any = await this.conn.agent.request('session/set_config_option', { sessionId: this.sessionId!, configId, value } as any);
+    // ACP: boolean options must be tagged with type "boolean"; select options send the value id
+    const params = typeof value === 'boolean' ? { sessionId: this.sessionId!, configId, type: 'boolean' as const, value } : { sessionId: this.sessionId!, configId, value };
+    const r: any = await this.conn.agent.request('session/set_config_option', params);
     if (r?.configOptions) this.configOptions = flattenConfig(r.configOptions);
     this.changed();
   }
