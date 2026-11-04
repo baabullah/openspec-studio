@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
   Archive, Check, ChevronDown, ChevronRight, Compass, FolderGit2, GitMerge, MessageSquare, MoreHorizontal, Pencil, Play,
-  Plus, RefreshCw, Search, Sparkles, Eye,
+  Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X,
 } from 'lucide-react';
-import type { ChangeStage, ChangeSummary } from '../../../shared/protocol.ts';
-import { loadRepos, openChange, runAction, selectRepo, useStore } from '../store.ts';
+import type { ChangeStage, ChangeSummary, RepoInfo } from '../../../shared/protocol.ts';
+import { loadRepos, openAddFolder, openChange, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
 import { Badge, Button, Chip, cx, Dialog, IconButton, Menu, MenuItem, timeAgo, useDismiss } from '../lib/ui.tsx';
 
 const STAGES: { id: ChangeStage; label: string; hint: string }[] = [
@@ -15,13 +15,17 @@ const STAGES: { id: ChangeStage; label: string; hint: string }[] = [
   { id: 'done', label: 'Done', hint: 'Sync specs and archive' },
 ];
 
+/** Keep the end of a long path, which is the part that tells folders apart. */
+const shortPath = (p: string, max = 46) => (p.length > max ? `…${p.slice(-(max - 1))}` : p);
+
 function RepoPicker() {
-  const { repos, repo, root } = useStore();
+  const { repos, repo, roots, reposLoaded } = useStore();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
-  const list = repos.filter((r) => r.name.toLowerCase().includes(q.toLowerCase()));
-  const cur = repos.find((r) => r.name === repo);
+  const match = (r: RepoInfo) => `${r.name} ${r.rel}`.toLowerCase().includes(q.toLowerCase());
+  const cur = repos.find((r) => r.id === repo);
+  const pick = (id: string) => { selectRepo(id); setOpen(false); setQ(''); };
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen(!open)}
@@ -29,30 +33,54 @@ function RepoPicker() {
         <FolderGit2 size={17} className="shrink-0 text-accent" />
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] text-muted">Repository</span>
-          <span className="block truncate text-[13.5px] font-semibold">{cur?.name.split('/').pop() ?? 'Choose a repo'}</span>
+          <span className="block truncate text-[13.5px] font-semibold" title={cur?.id}>{cur?.name ?? 'Choose a repo'}</span>
         </span>
         <ChevronDown size={15} className="text-muted" />
       </button>
       {open && (
-        <div className="absolute inset-x-0 z-40 mt-1 rounded-xl border border-line bg-surface shadow-pop">
+        <div className="absolute inset-x-0 z-40 mt-1 w-[min(420px,calc(100vw-24px))] rounded-xl border border-line bg-surface shadow-pop">
           <div className="flex items-center gap-2 border-b border-line px-2.5 py-2">
             <Search size={14} className="text-muted" />
             <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter…" className="flex-1 bg-transparent text-[13px] outline-none" />
             <IconButton title="Rescan folders" onClick={() => loadRepos(true)}><RefreshCw size={13} /></IconButton>
           </div>
-          <div className="max-h-80 overflow-y-auto p-1">
-            {list.map((r) => (
-              <button key={r.name} onClick={() => { selectRepo(r.name); setOpen(false); setQ(''); }}
-                className={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2', r.name === repo && 'bg-accent-soft')}>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] font-medium">{r.name.split('/').pop()}</span>
-                  {r.name.includes('/') && <span className="block truncate text-[11px] text-muted">{r.name}</span>}
-                </span>
-                {r.session && <span className="h-2 w-2 rounded-full bg-ok" title="agent connected" />}
-                {r.openspec ? <Badge tone="accent">OpenSpec</Badge> : <span className="text-[11px] text-muted">not set up</span>}
-              </button>
-            ))}
-            {!list.length && <div className="px-3 py-4 text-center text-xs text-muted">No repos found under {root}</div>}
+          <div className="max-h-[60vh] overflow-y-auto p-1">
+            {reposLoaded && !roots.length && (
+              <div className="px-3 py-5 text-center text-[12.5px] text-muted">No folders yet. Add the folder that holds your repos.</div>
+            )}
+            {roots.map((root) => {
+              const list = repos.filter((r) => r.root === root.path && match(r));
+              return (
+                <div key={root.path} className="mb-1">
+                  <div className="group flex items-center gap-1.5 px-2.5 pb-0.5 pt-2 text-[11px] text-muted">
+                    <span className="min-w-0 flex-1 truncate font-mono" title={root.path}>{shortPath(root.path)}</span>
+                    {root.truncated && <span className="text-warn" title="Scanning stopped early: this folder is very large. Add a more specific folder.">partial</span>}
+                    {root.fromEnv ? <span title="Set by the REPOS_ROOT environment variable"><Badge>REPOS_ROOT</Badge></span> : (
+                      <button title="Remove this folder from Studio (nothing is deleted on disk)" onClick={() => removeRoot(root.path)}
+                        className="rounded p-0.5 opacity-0 hover:bg-surface-2 hover:text-bad group-hover:opacity-100 focus:opacity-100"><X size={12} /></button>
+                    )}
+                  </div>
+                  {list.map((r) => (
+                    <button key={r.id} onClick={() => pick(r.id)} title={r.id}
+                      className={cx('flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left hover:bg-surface-2', r.id === repo && 'bg-accent-soft')}>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium">{r.name}</span>
+                        {r.rel.includes('/') && <span className="block truncate text-[11px] text-muted">{r.rel}</span>}
+                      </span>
+                      {r.session && <span className="h-2 w-2 rounded-full bg-ok" title="agent connected" />}
+                      {r.openspec ? <Badge tone="accent">OpenSpec</Badge> : <span className="text-[11px] text-muted">not set up</span>}
+                    </button>
+                  ))}
+                  {!list.length && <div className="px-2.5 py-1.5 text-[12px] text-muted">{q ? 'No match' : 'No repos found in this folder'}</div>}
+                </div>
+              );
+            })}
+          </div>
+          <div className="border-t border-line p-1">
+            <button onClick={() => { setOpen(false); openAddFolder(); }}
+              className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-accent hover:bg-surface-2">
+              <FolderPlus size={14} /> Add folder…
+            </button>
           </div>
         </div>
       )}
@@ -192,7 +220,7 @@ export function RepoRail() {
   const [showArchived, setShowArchived] = useState(false);
   confirmArchive = setArchiveName;
   const grouped = useMemo(() => STAGES.map((s) => ({ ...s, items: changes.filter((c) => c.stage === s.id) })).filter((g) => g.items.length), [changes]);
-  const hasOpenSpec = repos.find((r) => r.name === repo)?.openspec;
+  const hasOpenSpec = repos.find((r) => r.id === repo)?.openspec;
 
   return (
     <nav className="flex h-full min-h-0 flex-col border-r border-line bg-bg">

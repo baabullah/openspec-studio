@@ -17,7 +17,11 @@ npm run dev            # API :3940 + web :5173 → open http://127.0.0.1:5173
 # or production
 npm run build && npm start   # everything on http://127.0.0.1:3940
 ```
-Env: `REPOS_ROOT` (folder scanned for repos; default = two levels above this folder), `PORT`, `HOST` (default 127.0.0.1),
+Pick the folders that hold your repos in the UI (repo menu → **Add folder…**). They are saved in
+`~/.openspec-studio/config.json`; Studio lists every git or OpenSpec repo up to 4 levels inside them.
+
+Env (all optional): `REPOS_ROOT` (a folder that is always listed, in addition to the ones picked in the UI), `PORT`,
+`HOST` (default 127.0.0.1), `ALLOWED_HOSTS` (extra host names the server answers to, comma separated),
 `DEFAULT_AGENT`, `STUDIO_DATA` (default `~/.openspec-studio`), `REPO_SCAN_DEPTH` (default 4),
 `OPENSPEC_BIN` (default `openspec` on PATH).
 
@@ -58,9 +62,10 @@ Add or override agents in `~/.openspec-studio/agents.json`:
 Comments are anchored by quote + context, so they re-attach after edits; ones whose text disappeared are flagged.
 
 ## Security
-The agent can run code. The server binds to localhost, checks Origin on WebSocket and mutating requests, limits repos to
-`REPOS_ROOT`, serves files only from `<repo>/openspec`, and confines the agent's ACP file reads/writes to the repo. There is
-no authentication: do not expose it on a network.
+The agent can run code. The server binds to localhost and only answers requests whose `Host` is localhost/127.0.0.1/[::1]
+(or `ALLOWED_HOSTS`), which blocks DNS-rebinding attacks from web pages. WebSocket and mutating requests must also come
+from the same origin. Repos are limited to the folders you added, files are served only from `<repo>/openspec`, and the
+agent's ACP file reads/writes are confined to the repo. There is no authentication: do not expose it on a network.
 
 ## Tests
 `npm test` (anchoring, prompt composer, result parser, path sandbox).

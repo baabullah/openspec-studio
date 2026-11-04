@@ -47,7 +47,7 @@ export function AgentPanel() {
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const [text, setText] = useState('');
-  const hasOpenSpec = repos.find((r) => r.name === repo)?.openspec;
+  const hasOpenSpec = repos.find((r) => r.id === repo)?.openspec;
 
   // follow the stream; jump to the newest message when a repo's history loads
   useEffect(() => { stick.current = true; }, [repo]);

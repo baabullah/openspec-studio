@@ -97,8 +97,72 @@ export const rounds = {
       ON CONFLICT (id) DO UPDATE SET json = excluded.json, snapshot = excluded.snapshot`)
       .run(round.id, round.repo, round.change, round.createdAt, JSON.stringify(round), JSON.stringify(snapshot));
   },
+  repos(): string[] {
+    return (db.prepare('SELECT DISTINCT repo FROM rounds').all() as { repo: string }[]).map((r) => r.repo);
+  },
   running(repo: string): ReviewRound | null {
     const all = (db.prepare('SELECT json FROM rounds WHERE repo = ?').all(repo) as any[]).map((r) => JSON.parse(r.json) as ReviewRound);
     return all.find((r) => r.status === 'running') ?? null;
   },
 };
+
+// ---- migration: repo ids used to be paths relative to REPOS_ROOT ------------------
+const isAbsId = (r: string) => r.startsWith('/') || /^[A-Za-z]:[\\/]/.test(r) || r.startsWith('\\\\');
+
+/**
+ * Where did an old relative id live? REPOS_ROOT may have been set back then and
+ * not now, so when <legacyRoot>/<rel> doesn't exist, look for absolute paths
+ * ending in /<rel> in that repo's own agent events (tool calls quote the cwd).
+ */
+function locateLegacy(rel: string, legacyRoot: string, exists: (p: string) => boolean, join: (a: string, b: string) => string): string | null {
+  const direct = join(legacyRoot, rel);
+  if (exists(direct)) return direct;
+  const esc = rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\//g, '[\\\\/]');
+  const re = new RegExp(`((?:[A-Za-z]:|/)[^"'\\s\`]*?[\\\\/]${esc})(?=$|["'\\s\`\\\\/])`, 'g');
+  const counts = new Map<string, number>();
+  const rows = db.prepare('SELECT json FROM events WHERE repo = ? ORDER BY seq LIMIT 3000').all(rel) as { json: string }[];
+  for (const r of rows) {
+    const text = r.json.replace(/\\\\/g, '\\'); // JSON-escaped backslashes (Windows paths)
+    for (const m of text.matchAll(re)) counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+  }
+  const best = [...counts].sort((a, b) => b[1] - a[1]).find(([p]) => exists(p));
+  return best?.[0] ?? null;
+}
+
+/**
+ * Rewrite relative repo ids to absolute paths (the new id). Returns the folders
+ * those repos were in, so the caller can keep them listed.
+ */
+export function migrateRepoIds(legacyRoot: string, fsx: { exists: (p: string) => boolean; real: (p: string) => string; join: (a: string, b: string) => string }): string[] {
+  const old = new Set<string>();
+  for (const t of ['sessions', 'events', 'comments', 'rounds']) {
+    for (const r of db.prepare(`SELECT DISTINCT repo FROM ${t}`).all() as { repo: string }[]) if (!isAbsId(r.repo)) old.add(r.repo);
+  }
+  if (!old.size) return [];
+  const folders = new Set<string>();
+  db.exec('BEGIN');
+  try {
+    for (const rel of old) {
+      const found = locateLegacy(rel, legacyRoot, fsx.exists, fsx.join);
+      const abs = found ? fsx.real(found) : fsx.join(legacyRoot, rel); // not found: keep data, it just won't show
+      if (found) {
+        // the folder = abs minus the relative part
+        const parts = rel.split('/').length;
+        let root = abs;
+        for (let i = 0; i < parts; i++) root = root.replace(/[\\/][^\\/]+$/, '');
+        if (root) folders.add(root);
+      }
+      db.prepare('UPDATE sessions SET repo = ? WHERE repo = ?').run(abs, rel);
+      db.prepare('UPDATE events SET repo = ? WHERE repo = ?').run(abs, rel);
+      for (const t of ['comments', 'rounds']) {
+        for (const row of db.prepare(`SELECT id, json FROM ${t} WHERE repo = ?`).all(rel) as { id: string; json: string }[]) {
+          const j = JSON.parse(row.json);
+          j.repo = abs;
+          db.prepare(`UPDATE ${t} SET repo = ?, json = ? WHERE id = ?`).run(abs, JSON.stringify(j), row.id);
+        }
+      }
+    }
+    db.exec('COMMIT');
+  } catch (e) { db.exec('ROLLBACK'); throw e; }
+  return [...folders];
+}

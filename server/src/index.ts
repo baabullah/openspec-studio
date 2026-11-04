@@ -8,12 +8,23 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import chokidar, { type FSWatcher } from 'chokidar';
 import type { ClientMsg, LifecycleAction, ServerMsg } from '../../shared/protocol.ts';
 import { agents, DEFAULT_AGENT, getAgent } from './agents.ts';
-import { comments, events, rounds } from './db.ts';
+import { comments, events, migrateRepoIds, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
-import { findRepos, hasOpenSpec, repoPath, ROOT, safeResolve, STUDIO_DIR } from './repos.ts';
+import { hasOpenSpec, safeResolve, STUDIO_DIR } from './repos.ts';
+import { addRoot, browse, findRepos, removeRoot, repoPath, roots, seedRoots } from './workspace.ts';
 import { allowedHostnames, hostAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, sendReview } from './review/service.ts';
+
+// Older versions identified repos by their path relative to a single REPOS_ROOT
+// (default: two levels above this folder). Move that data to absolute ids, and
+// keep that root as a folder so existing repos stay listed.
+const LEGACY_ROOT = path.resolve(process.env.REPOS_ROOT || path.join(STUDIO_DIR, '..', '..'));
+seedRoots(migrateRepoIds(LEGACY_ROOT, {
+  exists: (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } },
+  real: (p) => { try { return fs.realpathSync.native(p); } catch { return p; } },
+  join: (a, b) => path.join(a, b),
+}));
 
 const PORT = Number(process.env.PORT || 3940);
 const HOST = process.env.HOST || '127.0.0.1'; // the agent can run code: keep this local
@@ -86,13 +97,36 @@ const validChange = (abs: string, change: unknown): change is string =>
   typeof change === 'string' && /^[\w.-]+$/.test(change) && fs.existsSync(openspec.changeDir(abs, change));
 
 app.get('/api/config', (c) => c.json({
-  root: ROOT, defaultAgent: DEFAULT_AGENT,
+  defaultAgent: DEFAULT_AGENT, platform: process.platform,
   agents: agents().map(({ id, label, openspecTool }) => ({ id, label, openspecTool })),
 }));
 
-app.get('/api/repos', (c) => c.json(findRepos(c.req.query('refresh') === '1').map((name) => ({
-  name, openspec: hasOpenSpec(path.join(ROOT, name)), session: hub.get(name)?.state() ?? null,
-}))));
+const listRepos = async (refresh = false) => {
+  const { repos, truncated } = await findRepos(refresh);
+  return {
+    roots: roots().map((r) => ({ ...r, truncated: truncated.includes(r.path) })),
+    repos: repos.map((r) => ({ ...r, openspec: hasOpenSpec(r.id), session: hub.get(r.id)?.state() ?? null })),
+  };
+};
+app.get('/api/repos', async (c) => c.json(await listRepos(c.req.query('refresh') === '1')));
+
+// folders the studio works in, chosen in the UI
+app.post('/api/roots', async (c) => {
+  const b = await body(c);
+  try { addRoot(b.path); } catch (e: any) { return c.json({ error: e.message }, 400); }
+  return c.json(await listRepos(true));
+});
+app.delete('/api/roots', async (c) => {
+  const b = await body(c);
+  const p = String(b.path ?? '');
+  // stop agents in repos that are no longer reachable
+  removeRoot(p);
+  for (const id of hub.repos()) if (!repoPath(id)) hub.stop(id);
+  return c.json(await listRepos());
+});
+app.get('/api/browse', (c) => {
+  try { return c.json(browse(c.req.query('path'))); } catch (e: any) { return c.json({ error: e.message }, 400); }
+});
 
 app.post('/api/init', async (c) => {
   const b = await body(c);
@@ -101,7 +135,6 @@ app.post('/api/init', async (c) => {
   if (!agent?.openspecTool) return c.json({ error: 'agent has no OpenSpec integration' }, 400);
   if (hasOpenSpec(abs)) return c.json({ error: 'already initialized' }, 409);
   const r = await openspec.init(abs, agent.openspecTool);
-  findRepos(true);
   hub.emit(repo, { kind: 'notice', level: r.ok ? 'info' : 'error', text: `openspec init --tools ${agent.openspecTool}\n${r.out.trim()}` });
   return c.json({ ok: r.ok, output: r.out }, r.ok ? 200 : 500);
 });
@@ -214,7 +247,7 @@ if (fs.existsSync(WEB_DIST)) {
 
 // ---- WebSocket -----------------------------------------------------------------
 const server = serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () =>
-  console.log(`openspec-studio api on http://${HOST}:${PORT}  (repos root: ${ROOT})`));
+  console.log(`openspec-studio api on http://${HOST}:${PORT}  (folders: ${roots().map((r) => r.path).join(', ') || 'none yet, add one in the UI'})`));
 
 const wss = new WebSocketServer({
   server: server as any,
@@ -275,7 +308,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-closeStaleRounds(repoPath, findRepos());
+closeStaleRounds(repoPath, rounds.repos());
 
 const shutdown = () => { hub.stopAll(); process.exit(0); };
 process.on('SIGINT', shutdown);

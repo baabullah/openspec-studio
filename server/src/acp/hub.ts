@@ -242,6 +242,8 @@ export class Hub {
 
   get(repo: string) { return this.sessions.get(repo) ?? null; }
 
+  repos() { return [...this.sessions.keys()]; }
+
   emit(repo: string, e: AgentEvent) {
     this.listener.onEvent(repo, events.append(repo, e));
   }

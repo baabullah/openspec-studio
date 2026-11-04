@@ -5,6 +5,7 @@ import { cx, IconButton } from './lib/ui.tsx';
 import { RepoRail } from './panes/RepoRail.tsx';
 import { DocReview } from './panes/DocReview.tsx';
 import { AgentPanel } from './panes/AgentPanel.tsx';
+import { AddFolderDialog } from './panes/Folders.tsx';
 
 function Toasts() {
   const toasts = useStore((s) => s.toasts);
@@ -38,6 +39,7 @@ export function App() {
         {!wsUp && <span className="flex items-center gap-1 rounded-full bg-bad-soft px-2 py-0.5 text-[11px] text-bad"><WifiOff size={11} /> server offline</span>}
       </div>
       <Toasts />
+      <AddFolderDialog />
     </div>
   );
 }

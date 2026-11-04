@@ -9,9 +9,24 @@ export interface AgentInfo {
 }
 
 export interface RepoInfo {
-  name: string; // path relative to REPOS_ROOT
+  id: string; // absolute path; the repo's identity everywhere
+  name: string; // folder name
+  root: string; // the workspace folder it was found in
+  rel: string; // path relative to that folder ('' when the folder is the repo)
   openspec: boolean;
   session: SessionState | null;
+}
+
+/** A folder the studio scans for repos (chosen in the UI, or REPOS_ROOT). */
+export interface RootInfo { path: string; fromEnv: boolean; truncated: boolean }
+
+export interface Workspace { roots: RootInfo[]; repos: RepoInfo[] }
+
+export interface BrowseResult {
+  path: string | null; // null = starting places (home, folders, drives)
+  parent: string | null;
+  entries: { name: string; path: string; repo: boolean }[];
+  truncated: boolean;
 }
 
 export type SessionStatus = 'starting' | 'ready' | 'busy' | 'exited' | 'error';

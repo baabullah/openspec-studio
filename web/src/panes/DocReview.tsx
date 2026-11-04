@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import type { CommentKind, ReviewComment } from '../../../shared/protocol.ts';
 import { locate } from '../../../shared/anchor.ts';
-import { initRepo, openFile, review, sendPrompt, setAgent, useStore } from '../store.ts';
+import { initRepo, openAddFolder, openFile, review, sendPrompt, setAgent, useStore } from '../store.ts';
 import { Badge, Button, cx, Dialog, Spinner } from '../lib/ui.tsx';
 import { CommentCard } from '../review/CommentCard.tsx';
 import { Composer } from '../review/Composer.tsx';
@@ -319,15 +319,22 @@ function ReviewBar({ onGeneral }: { onGeneral: (scope: 'doc' | 'change') => void
 
 // ---- pane ---------------------------------------------------------------------------
 export function DocReview() {
-  const { repo, repos, changes, change, file, rounds, agents, agent, comments } = useStore();
+  const { repo, repos, roots, reposLoaded, changes, change, file, rounds, agents, agent, comments } = useStore();
   const [general, setGeneral] = useState<'doc' | 'change' | null>(null);
-  const repoInfo = repos.find((r) => r.name === repo);
+  const repoInfo = repos.find((r) => r.id === repo);
   const c = changes.find((x) => x.name === change);
   const lastDone = rounds.find((r) => r.status === 'done');
   const [seenRound, setSeenRound] = useState<string | null>(null);
   const [initing, setIniting] = useState(false);
 
-  if (!repo) return <Empty icon={<FolderPlus size={28} />} title="Pick a repository" text="Choose a repo on the left to start working with OpenSpec." />;
+  if (!repo) {
+    return reposLoaded && !roots.length ? (
+      <Empty icon={<FolderPlus size={28} />} title="Add the folder with your repos"
+        text="Pick a folder on this computer. Studio lists the git and OpenSpec repos inside it, and you can add more folders later.">
+        <Button variant="primary" className="mt-4" onClick={() => openAddFolder()}><FolderPlus size={14} /> Add folder</Button>
+      </Empty>
+    ) : <Empty icon={<FolderPlus size={28} />} title="Pick a repository" text="Choose a repo on the left to start working with OpenSpec." />;
+  }
 
   if (repoInfo && !repoInfo.openspec) {
     const ag = agents.filter((a) => a.openspecTool);

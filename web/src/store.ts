@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentInfo, ChangeSummary, ClientMsg, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, ServerMsg, SessionState,
+  AgentInfo, ChangeSummary, ClientMsg, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
 } from '../../shared/protocol.ts';
 import { api } from './lib/api.ts';
 
@@ -14,7 +14,9 @@ export interface Toast { id: number; text: string; level: 'info' | 'error' }
 interface State {
   agents: AgentInfo[];
   defaultAgent: string;
-  root: string;
+  platform: string;
+  roots: RootInfo[];
+  reposLoaded: boolean;
   repos: RepoInfo[];
   repo: string | null;
   agent: string;
@@ -31,12 +33,13 @@ interface State {
   focusComment: string | null;
   toasts: Toast[];
   wsUp: boolean;
+  addFolderOpen: boolean;
 }
 
 export const useStore = create<State>(() => ({
-  agents: [], defaultAgent: 'codebuddy', root: '', repos: [], repo: null, agent: 'codebuddy',
+  agents: [], defaultAgent: 'codebuddy', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: 'codebuddy',
   session: null, events: [], changes: [], archived: [], changesLoaded: false, change: null, file: null, content: '',
-  comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false,
+  comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false,
 }));
 const set = useStore.setState;
 const get = useStore.getState;
@@ -74,7 +77,7 @@ function onServer(m: ServerMsg) {
     case 'session':
       set({ session: m.session });
       if (m.session?.status === 'ready') readyWaiters.splice(0).forEach((f) => f());
-      set((s) => ({ repos: s.repos.map((r) => (r.name === m.repo ? { ...r, session: m.session } : r)) }));
+      set((s) => ({ repos: s.repos.map((r) => (r.id === m.repo ? { ...r, session: m.session } : r)) }));
       break;
     case 'replay': set({ events: m.entries }); break;
     case 'event':
@@ -106,22 +109,44 @@ export async function boot() {
   booted = true;
   connectWs();
   const cfg = await guard(api.config());
-  if (cfg) set({ agents: cfg.agents, defaultAgent: cfg.defaultAgent, root: cfg.root });
+  if (cfg) set({ agents: cfg.agents, defaultAgent: cfg.defaultAgent, platform: cfg.platform });
   await loadRepos();
   const last = ls.get('repo');
-  if (last && get().repos.some((r) => r.name === last)) selectRepo(last);
+  // older versions stored the path relative to the single repos root
+  const hit = last && get().repos.find((r) => r.id === last || (r.rel && r.rel === last));
+  if (hit) selectRepo(hit.id);
 }
+
+const applyWorkspace = (w: Workspace) => {
+  set({ roots: w.roots, repos: w.repos, reposLoaded: true });
+  const { repo } = get();
+  if (repo && !w.repos.some((r) => r.id === repo)) set({ repo: null, session: null, events: [], changes: [], change: null, file: null, content: '' });
+};
 
 export async function loadRepos(refresh = false) {
-  const repos = await guard(api.repos(refresh));
-  if (repos) set({ repos });
+  const w = await guard(api.repos(refresh));
+  if (w) applyWorkspace(w);
 }
 
-export function selectRepo(name: string) {
-  ls.set('repo', name);
-  const agent = ls.get(`agent:${name}`) || get().defaultAgent;
-  set({ repo: name, agent, session: null, events: [], changes: [], archived: [], changesLoaded: false, change: null, file: null, content: '', comments: [], rounds: [] });
-  wsSend({ type: 'subscribe', repo: name });
+export async function addRoot(path: string): Promise<boolean> {
+  const w = await guard(api.addRoot(path));
+  if (!w) return false;
+  applyWorkspace(w);
+  return true;
+}
+
+export const openAddFolder = (open = true) => set({ addFolderOpen: open });
+
+export async function removeRoot(path: string) {
+  const w = await guard(api.removeRoot(path));
+  if (w) applyWorkspace(w);
+}
+
+export function selectRepo(id: string) {
+  ls.set('repo', id);
+  const agent = ls.get(`agent:${id}`) || get().defaultAgent;
+  set({ repo: id, agent, session: null, events: [], changes: [], archived: [], changesLoaded: false, change: null, file: null, content: '', comments: [], rounds: [] });
+  wsSend({ type: 'subscribe', repo: id });
   loadChanges();
 }
 
@@ -163,7 +188,7 @@ export async function initRepo() {
   const r = await guard(api.init(repo, agent));
   if (!r) return;
   toast('OpenSpec initialized');
-  await loadRepos(true);
+  await loadRepos();
   await loadChanges();
   // a fresh session so the agent picks up the new commands/skills
   if (get().session) startAgent(false);
