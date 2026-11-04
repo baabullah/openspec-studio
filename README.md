@@ -69,3 +69,6 @@ agent's ACP file reads/writes are confined to the repo. There is no authenticati
 
 ## Tests
 `npm test` (anchoring, prompt composer, result parser, path sandbox).
+
+## License
+MIT, see [LICENSE](LICENSE).
