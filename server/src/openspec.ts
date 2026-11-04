@@ -1,21 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFile } from 'node:child_process';
+import { runCmd } from './proc.ts';
 import type { ArtifactStatus, ChangeStage, ChangeSummary, ReviewComment } from '../../shared/protocol.ts';
 
 const OPENSPEC = process.env.OPENSPEC_BIN || 'openspec';
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
 
 // FORCE_COLOR (set by some shells / npm) overrides NO_COLOR and makes node print a
-// warning on stderr; drop it so output stays plain.
-const cliEnv = () => { const { FORCE_COLOR: _f, ...env } = process.env; return { ...env, NO_COLOR: '1' }; };
+// warning on stderr; drop it so output stays plain. Telemetry is off by default for
+// these calls: the studio runs the CLI on every refresh, and behind a proxy each call
+// waits ~10s for the telemetry request to time out. An explicit setting wins.
+const cliEnv = () => {
+  const { FORCE_COLOR: _f, ...env } = process.env;
+  return { ...env, NO_COLOR: '1', OPENSPEC_TELEMETRY: process.env.OPENSPEC_TELEMETRY ?? '0' };
+};
 
 export function run(args: string[], cwd: string, timeout = 60_000): Promise<{ ok: boolean; out: string; stdout: string; stderr: string }> {
-  return new Promise((resolve) => {
-    execFile(OPENSPEC, args, { cwd, timeout, maxBuffer: 16 * 1024 * 1024, env: cliEnv() }, (err, so, se) => {
-      const stdout = stripAnsi(String(so)), stderr = stripAnsi(String(se));
-      resolve({ ok: !err, out: stdout + stderr, stdout, stderr });
-    });
+  return runCmd(OPENSPEC, args, { cwd, timeout, env: cliEnv() }).then((r) => {
+    const stdout = stripAnsi(r.stdout), stderr = stripAnsi(r.stderr);
+    return { ok: r.ok, out: stdout + stderr, stdout, stderr };
   });
 }
 

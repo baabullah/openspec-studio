@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
+import type { ChildProcess } from 'node:child_process';
+import { killTree, spawnCmd } from '../proc.ts';
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
 import type { AgentEvent, ConfigOption, LoggedEvent, SessionState, SessionStatus } from '../../../shared/protocol.ts';
@@ -49,7 +50,7 @@ export class AgentSession {
     private emit: (e: AgentEvent) => void,
     private changed: () => void,
   ) {
-    this.proc = spawn(agent.cmd, agent.args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: agentEnv(agent.env) });
+    this.proc = spawnCmd(agent.cmd, agent.args, { cwd, stdio: ['pipe', 'pipe', 'pipe'], env: agentEnv(agent.env) });
     this.proc.stderr!.on('data', (d) => {
       this.stderrTail.push(...String(d).split('\n').filter(Boolean));
       this.stderrTail = this.stderrTail.slice(-20);
@@ -228,7 +229,7 @@ export class AgentSession {
   stop() {
     this.cancelPending();
     this.conn.close();
-    this.proc.kill();
+    killTree(this.proc);
   }
 }
 

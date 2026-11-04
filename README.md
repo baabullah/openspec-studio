@@ -18,7 +18,20 @@ npm run dev            # API :3940 + web :5173 → open http://127.0.0.1:5173
 npm run build && npm start   # everything on http://127.0.0.1:3940
 ```
 Env: `REPOS_ROOT` (folder scanned for repos; default = two levels above this folder), `PORT`, `HOST` (default 127.0.0.1),
-`DEFAULT_AGENT`, `STUDIO_DATA` (default `~/.openspec-studio`), `REPO_SCAN_DEPTH` (default 4).
+`DEFAULT_AGENT`, `STUDIO_DATA` (default `~/.openspec-studio`), `REPO_SCAN_DEPTH` (default 4),
+`OPENSPEC_BIN` (default `openspec` on PATH).
+
+### Requirements & platforms
+- **Node.js ≥ 22.13** (uses the built-in `node:sqlite`), the `openspec` CLI on PATH, and the agent CLI you pick
+  (e.g. `codebuddy`), logged in once from a terminal.
+- **macOS / Linux / Windows (native)** work the same way. On Windows, npm-installed CLIs are `.cmd` shims; the
+  server launches them via cross-spawn and stops agents with their whole process tree.
+- **WSL with the repo on `/mnt/c`**: works, but file watching falls back to polling and installs/builds are slow.
+  Prefer keeping repos in the Linux filesystem, or run Studio with Windows Node instead.
+- Install with the same OS you run on: `node_modules` contains native binaries (esbuild), so a folder installed from
+  WSL won't run under Windows Node and vice versa.
+- Studio calls the `openspec` CLI with `OPENSPEC_TELEMETRY=0` unless you set it yourself; behind a proxy each call
+  otherwise waits ~10s for the telemetry request to time out.
 
 ## Agents
 | id | how it runs | OpenSpec invocation |
