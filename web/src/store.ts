@@ -214,6 +214,10 @@ export const review = {
     const r = await guard(api.sendReview(repo, change));
     if (r) toast('Review sent to the agent');
   },
+  async close() {
+    const { repo, change } = get();
+    if (repo && change) await guard(api.closeRound(repo, change));
+  },
 };
 
 export function answerPermission(id: string, optionId: string | null, label: string) {

@@ -54,10 +54,43 @@ export async function sendReview(session: AgentSession, repo: string, repoAbs: s
   const n = list.length;
   // don't await: the turn can take minutes; finish the round when it ends
   session.prompt(prompt, `Review sent · ${n} item${n > 1 ? 's' : ''} · ${change}`).then(({ stopReason, reply }) => {
-    finishRound(round.id, repoAbs, reply, stopReason);
+    onTurnEnd(repo, repoAbs, stopReason, reply);
     onDone();
   });
   return round;
+}
+
+/**
+ * Turns that end like this didn't finish the work; the user can press Continue
+ * and the agent picks up where it stopped. The round stays open until a turn
+ * ends normally (or is cancelled, or the user closes it).
+ */
+export const CONTINUABLE = new Set(['refusal', 'error', 'max_tokens', 'max_turn_requests']);
+const replies = new Map<string, string>(); // round id → agent replies so far
+
+/** Call after every agent turn in a repo. Returns the change whose round was updated, if any. */
+export function onTurnEnd(repo: string, repoAbs: string, stopReason: string, reply: string): string | null {
+  const running = rounds.running(repo);
+  const r = running && rounds.get(running.id);
+  if (!r) return null;
+  const all = [replies.get(r.round.id), reply].filter(Boolean).join('\n\n');
+  if (CONTINUABLE.has(stopReason)) {
+    replies.set(r.round.id, all);
+    rounds.put({ ...r.round, stopReason }, r.snapshot); // "interrupted, waiting for Continue"
+  } else {
+    replies.delete(r.round.id);
+    finishRound(r.round.id, repoAbs, all, stopReason);
+  }
+  return r.round.change;
+}
+
+/** The user gives up on an interrupted round: settle it with what we have. */
+export function closeRound(repo: string, repoAbs: string, change: string): boolean {
+  const r = rounds.running(repo);
+  if (!r || r.change !== change) return false;
+  finishRound(r.id, repoAbs, replies.get(r.id) ?? '', r.stopReason ?? 'closed');
+  replies.delete(r.id);
+  return true;
 }
 
 export function finishRound(roundId: string, repoAbs: string, reply: string, stopReason: string) {
@@ -93,6 +126,7 @@ export function closeStaleRounds(repoAbsOf: (repo: string) => string | null, rep
   for (const repo of repos) {
     const r = rounds.running(repo);
     const abs = r && repoAbsOf(repo);
-    if (r && abs) finishRound(r.id, abs, '', 'interrupted');
+    // a round already waiting for Continue can still be finished (session/load); one mid-turn cannot
+    if (r && abs && !r.stopReason) finishRound(r.id, abs, '', 'interrupted');
   }
 }

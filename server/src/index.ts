@@ -12,7 +12,7 @@ import { comments, events, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
 import { findRepos, hasOpenSpec, repoPath, ROOT, safeResolve, STUDIO_DIR } from './repos.ts';
-import { closeStaleRounds, createComment, sendReview } from './review/service.ts';
+import { closeRound, closeStaleRounds, createComment, onTurnEnd, sendReview } from './review/service.ts';
 
 const PORT = Number(process.env.PORT || 3940);
 const HOST = process.env.HOST || '127.0.0.1'; // the agent can run code: keep this local
@@ -129,6 +129,9 @@ app.post('/api/action', async (c) => {
   const args = [needsChange ? b.change : '', text].filter(Boolean).join(' ');
   if (action === 'propose' && !text) return c.json({ error: 'describe the change' }, 400);
   const label = `${action[0].toUpperCase()}${action.slice(1)}${needsChange ? ` · ${b.change}` : ''}`;
+  // a new lifecycle step supersedes a review that is waiting for Continue
+  const open = rounds.running(repo);
+  if (open && closeRound(repo, abs, open.change)) reviewChanged(repo, open.change);
   s.prompt(s.agent.command(action, args), label).catch(() => {});
   return c.json({ ok: true });
 });
@@ -183,6 +186,16 @@ app.post('/api/review/send', async (c) => {
   return c.json(round);
 });
 
+app.post('/api/review/close', async (c) => {
+  const b = await body(c);
+  const { repo, abs } = repoOf(c, b.repo);
+  if (!validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
+  if (hub.get(repo)?.status === 'busy') return c.json({ error: 'agent is still working' }, 409);
+  if (!closeRound(repo, abs, b.change)) return c.json({ error: 'no open review round' }, 409);
+  reviewChanged(repo, b.change);
+  return c.json({ ok: true });
+});
+
 // ---- static (production build) ------------------------------------------------
 const WEB_DIST = path.join(STUDIO_DIR, 'web', 'dist');
 if (fs.existsSync(WEB_DIST)) {
@@ -232,7 +245,13 @@ wss.on('connection', (ws) => {
           break;
         }
         case 'stop': hub.stop(m.repo); break;
-        case 'prompt': await s?.prompt(String(m.text).slice(0, 20000)); break;
+        case 'prompt': {
+          // free-form turns (e.g. "Continue") may finish an interrupted review round
+          const res = await s?.prompt(String(m.text).slice(0, 20000));
+          const ch = res && onTurnEnd(m.repo, abs, res.stopReason, res.reply);
+          if (ch) reviewChanged(m.repo, ch);
+          break;
+        }
         case 'cancel': s?.cancel(); break;
         case 'permission': s?.answerPermission(m.id, m.optionId, m.label ?? (m.optionId ? 'answered' : 'cancelled')); break;
         case 'elicitation': s?.answerElicitation(m.id, m.action, m.content); break;

@@ -26,4 +26,5 @@ export const api = {
   patchComment: (id: string, patch: Partial<Pick<ReviewComment, 'body' | 'kind' | 'status'>>) => req<ReviewComment>('PATCH', `/api/comments/${id}`, patch),
   deleteComment: (id: string) => req<{ ok: true }>('DELETE', `/api/comments/${id}`),
   sendReview: (repo: string, change: string) => req<ReviewRound>('POST', '/api/review/send', { repo, change }),
+  closeRound: (repo: string, change: string) => req<{ ok: true }>('POST', '/api/review/close', { repo, change }),
 };

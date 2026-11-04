@@ -3,10 +3,11 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   CheckCheck, FileText, FolderPlus, GitCompareArrows, ListTodo, MessageSquarePlus, Send, Sparkles, Eye, EyeOff, Layers,
+  Play,
 } from 'lucide-react';
 import type { CommentKind, ReviewComment } from '../../../shared/protocol.ts';
 import { locate } from '../../../shared/anchor.ts';
-import { initRepo, openFile, review, setAgent, useStore } from '../store.ts';
+import { initRepo, openFile, review, sendPrompt, setAgent, useStore } from '../store.ts';
 import { Badge, Button, cx, Dialog, Spinner } from '../lib/ui.tsx';
 import { CommentCard } from '../review/CommentCard.tsx';
 import { Composer } from '../review/Composer.tsx';
@@ -298,7 +299,14 @@ function ReviewBar({ onGeneral }: { onGeneral: (scope: 'doc' | 'change') => void
           <CheckCheck size={14} /> {toCheck.length} to check · resolve addressed
         </button>
       )}
-      {running ? (
+      {running && running.stopReason && session?.status !== 'busy' ? (
+        // the review turn stopped early (refusal, error, limits): edits made on Continue still count
+        <span className="flex flex-wrap items-center gap-2 text-[13px]">
+          <span className="text-warn" title="The verdicts and diff will be collected when the agent finishes">Revision stopped ({running.stopReason.replace(/_/g, ' ')})</span>
+          <Button size="sm" variant="primary" disabled={session?.status !== 'ready'} onClick={() => sendPrompt('Continue where you left off.')}><Play size={13} /> Continue</Button>
+          <Button size="sm" variant="ghost" onClick={() => review.close()} title="Finish this round with whatever the agent did so far">Close round</Button>
+        </span>
+      ) : running ? (
         <span className="flex items-center gap-2 text-[13px] text-info"><Spinner /> Agent is revising…</span>
       ) : (
         <Button variant="primary" disabled={!canSend} onClick={() => review.send()}>
