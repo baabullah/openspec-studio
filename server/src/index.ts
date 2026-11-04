@@ -12,6 +12,7 @@ import { comments, events, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
 import { findRepos, hasOpenSpec, repoPath, ROOT, safeResolve, STUDIO_DIR } from './repos.ts';
+import { allowedHostnames, hostAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, sendReview } from './review/service.ts';
 
 const PORT = Number(process.env.PORT || 3940);
@@ -55,11 +56,18 @@ const reviewChanged = (repo: string, change: string) => broadcast(repo, { type: 
 // ---- HTTP API ------------------------------------------------------------------
 const app = new Hono();
 
+const ALLOWED = allowedHostnames();
+
+// DNS rebinding: only answer requests addressed to a host we serve (everything, incl. static files)
+app.use('*', async (c, next) => {
+  if (!hostAllowed(c.req.header('host'), ALLOWED)) return c.text('forbidden host', 403);
+  await next();
+});
+
 // CSRF: mutating requests must be same-origin JSON
 app.use('/api/*', async (c, next) => {
   if (c.req.method !== 'GET') {
-    const origin = c.req.header('origin');
-    if ((origin && new URL(origin).host !== c.req.header('host')) || !c.req.header('content-type')?.startsWith('application/json')) {
+    if (!requestAllowed(c.req.header('host'), c.req.header('origin'), ALLOWED) || !c.req.header('content-type')?.startsWith('application/json')) {
       return c.json({ error: 'forbidden' }, 403);
     }
   }
@@ -211,7 +219,7 @@ const server = serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () =>
 const wss = new WebSocketServer({
   server: server as any,
   path: '/ws',
-  verifyClient: ({ origin, req }: { origin: string; req: IncomingMessage }) => !origin || new URL(origin).host === req.headers.host,
+  verifyClient: ({ origin, req }: { origin: string; req: IncomingMessage }) => requestAllowed(req.headers.host, origin, ALLOWED),
 });
 
 wss.on('connection', (ws) => {
