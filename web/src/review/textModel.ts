@@ -87,6 +87,13 @@ export class TextModel {
     return stack.map((h) => h.text);
   }
 
+  /** Source line (from data-line) of the block containing this offset. */
+  lineAt(offset: number): number {
+    let lo = 0, hi = this.segs.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (this.segs[mid].start <= offset) lo = mid; else hi = mid - 1; }
+    return lineHintOf(this.segs[lo]?.node ?? null);
+  }
+
   /** Build an anchor for [start,end), trimming surrounding whitespace. */
   anchor(start: number, end: number, lineHint: number): Anchor | null {
     while (start < end && /\s/.test(this.text[start])) start++;

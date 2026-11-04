@@ -77,7 +77,7 @@ export function finishRound(roundId: string, repoAbs: string, reply: string, sto
       ...c,
       status: res ? res.status : 'unverified',
       agentNote: res?.note || null,
-      orphaned: !!(c.anchor && (src === undefined || !quoteExists(src, c.anchor.exact))),
+      orphaned: !!(c.anchor && (src === undefined || !quoteExists(src, c.anchor.exact, c.anchor))),
     });
   }
   const files = new Set([...Object.keys(before), ...Object.keys(after)]);

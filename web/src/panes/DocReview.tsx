@@ -65,7 +65,7 @@ function ReviewCanvas() {
   const modelRef = useRef<TextModel | null>(null);
   const [sel, setSel] = useState<{ start: number; end: number; top: number; left: number; line: number } | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [positions, setPositions] = useState<Record<string, { start: number; end: number; top: number }>>({});
+  const [positions, setPositions] = useState<Record<string, { start: number; end: number; top: number; fuzzy: boolean }>>({});
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
   const [, force] = useState(0);
 
@@ -87,7 +87,7 @@ function ReviewCanvas() {
     const groups: Record<string, Range[]> = { 'c-draft': [], 'c-sent': [], 'c-done': [], 'c-focus': [] };
     for (const c of comments) {
       if (c.file !== file || !c.anchor) continue;
-      const hit = locate(model.text, c.anchor);
+      const hit = locate(model.text, c.anchor, { headingPathAt: (o) => model.headingPath(o), lineAt: (o) => model.lineAt(o) });
       if (!hit) continue;
       const range = model.toRange(hit.start, hit.end);
       if (!range) continue;
@@ -215,6 +215,7 @@ function ReviewCanvas() {
         <div className={cx('relative w-[280px] shrink-0', narrow && 'hidden')}>
           {anchored.map((c) => (
             <CommentCard key={c.id} c={c} ref={(el) => { if (el) cardRefs.current.set(c.id, el); else cardRefs.current.delete(c.id); }}
+              drifted={positions[c.id]?.fuzzy}
               style={{ position: 'absolute', left: 0, right: 0, top: positions[c.id]?.top ?? 0, transition: 'top 120ms ease-out' }} />
           ))}
         </div>

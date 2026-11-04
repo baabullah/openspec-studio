@@ -1,12 +1,12 @@
 import { forwardRef, useState } from 'react';
-import { Bot, Check, Pencil, RotateCcw, Trash2, Unlink } from 'lucide-react';
+import { Bot, Check, Pencil, RotateCcw, Trash2, Unlink, Waypoints } from 'lucide-react';
 import type { ReviewComment } from '../../../shared/protocol.ts';
 import { review, useStore } from '../store.ts';
 import { Badge, Button, cx, IconButton, Spinner } from '../lib/ui.tsx';
 import { Composer } from './Composer.tsx';
 import { kindOf, STATUS_META, TO_CHECK } from './kinds.tsx';
 
-export const CommentCard = forwardRef<HTMLDivElement, { c: ReviewComment; style?: React.CSSProperties; showQuote?: boolean }>(function CommentCard({ c, style, showQuote }, ref) {
+export const CommentCard = forwardRef<HTMLDivElement, { c: ReviewComment; style?: React.CSSProperties; showQuote?: boolean; drifted?: boolean }>(function CommentCard({ c, style, showQuote, drifted }, ref) {
   const focused = useStore((s) => s.focusComment === c.id);
   const [editing, setEditing] = useState(false);
   const k = kindOf(c.kind);
@@ -33,9 +33,10 @@ export const CommentCard = forwardRef<HTMLDivElement, { c: ReviewComment; style?
         <span className="font-medium">{k.short}</span>
         <Badge tone={st.tone} className="ml-auto">{c.status === 'sent' && <Spinner className="h-2.5 w-2.5" />}{st.label}</Badge>
       </div>
-      {(showQuote || c.orphaned) && c.anchor && (
+      {(showQuote || c.orphaned || drifted) && c.anchor && (
         <div className="mt-1.5 line-clamp-2 border-l-2 border-line-strong pl-2 text-[11.5px] italic text-muted">{c.anchor.exact}</div>
       )}
+      {drifted && !c.orphaned && <div className="mt-1 flex items-center gap-1 text-[11px] text-muted" title="The quoted text was edited; the comment was re-attached to the closest match"><Waypoints size={11} /> Text edited since this comment</div>}
       {c.orphaned && <div className="mt-1 flex items-center gap-1 text-[11px] text-warn"><Unlink size={11} /> Quoted text no longer in the document</div>}
       {c.body && <div className={cx('mt-1.5 whitespace-pre-wrap break-words text-fg', !focused && 'line-clamp-3')}>{c.body}</div>}
       {c.agentNote && (
