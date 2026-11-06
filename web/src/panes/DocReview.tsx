@@ -16,6 +16,7 @@ import { lineHintOf, offsetAtPoint, paint, TextModel } from '../review/textModel
 import { FileDiffCard } from '../review/DiffView.tsx';
 import { ReadOnlyDoc } from './ReadOnlyDoc.tsx';
 import { ArchivedView } from './ArchivedView.tsx';
+import { ValidationPanel } from '../review/ValidationPanel.tsx';
 
 const CHANGES_TAB = '__changes__';
 
@@ -393,6 +394,7 @@ export function DocReview() {
           ))}
         </div>
       </header>
+      <ValidationPanel c={c} />
 
       {lastDone && lastDone.id !== seenRound && lastDone.diffs.length > 0 && file !== CHANGES_TAB && (
         <div className="flex items-center gap-3 border-b border-info/30 bg-info-soft px-6 py-2 text-[13px]">

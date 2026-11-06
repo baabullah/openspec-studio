@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import {
   Archive, Check, ChevronDown, ChevronRight, Compass, FolderGit2, GitMerge, MessageSquare, MoreHorizontal, Pencil, Play,
-  Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen,
+  Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen, ShieldAlert,
 } from 'lucide-react';
 import type { ChangeStage, ChangeSummary, RepoInfo } from '../../../shared/protocol.ts';
 import { loadRepos, openAddFolder, openArchived, openChange, openSpec, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
+import { issueCounts } from '../review/ValidationPanel.tsx';
 import { Badge, Button, Chip, cx, Dialog, IconButton, Menu, MenuItem, timeAgo, useDismiss } from '../lib/ui.tsx';
 
 const STAGES: { id: ChangeStage; label: string; hint: string }[] = [
@@ -119,6 +120,18 @@ function primaryAction(c: ChangeSummary): { label: string; icon: typeof Play; ru
   }
 }
 
+/** A small mark when `openspec validate` found problems in the change. */
+function ValidationMark({ c }: { c: ChangeSummary }) {
+  const { errors, warnings } = issueCounts(c);
+  if (!errors && !warnings) return null;
+  return (
+    <span className={cx('flex items-center gap-0.5', errors ? 'text-bad' : 'text-warn')}
+      title={`openspec validate: ${errors} error(s), ${warnings} warning(s). Open the change to see them.`}>
+      <ShieldAlert size={11} /> {errors || warnings}
+    </span>
+  );
+}
+
 let confirmArchive: (name: string) => void = () => {};
 
 function ChangeCard({ c }: { c: ChangeSummary }) {
@@ -135,6 +148,7 @@ function ChangeCard({ c }: { c: ChangeSummary }) {
           <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
             <span>{timeAgo(c.lastModified)}</span>
             {c.openComments > 0 && <span className="flex items-center gap-0.5 text-warn"><MessageSquare size={11} /> {c.openComments}</span>}
+            <ValidationMark c={c} />
           </div>
         </div>
         <div onClick={(e) => e.stopPropagation()}>
