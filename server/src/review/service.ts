@@ -35,6 +35,22 @@ export function createComment(repo: string, change: string, input: { file?: unkn
   return c;
 }
 
+/**
+ * Edit, resolve or reopen a comment. A comment in a running round is frozen
+ * (like delete, which already refuses it): the agent is working on exactly
+ * that text, and reopening would drop it from the round. Returns null then.
+ */
+export function patchComment(cm: ReviewComment, b: { body?: string; kind?: CommentKind; status?: 'resolved' | 'draft' }): ReviewComment | null {
+  if (cm.status === 'sent') return null;
+  const next = { ...cm };
+  if (b.body !== undefined) next.body = b.body;
+  if (b.kind) next.kind = b.kind;
+  if (b.status === 'resolved') next.status = 'resolved';
+  if (b.status === 'draft') { next.status = 'draft'; next.roundId = null; } // reopen → goes out with the next review
+  comments.put(next);
+  return next;
+}
+
 /** Comments that go out in the next review: drafts (new or reopened). */
 const outgoing = (repo: string, change: string) => comments.list(repo, change).filter((c) => c.status === 'draft');
 

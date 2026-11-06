@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { comments, rounds } from '../src/db.ts';
-import { closeRound, createComment, onTurnEnd, sendReview } from '../src/review/service.ts';
+import { closeRound, createComment, onTurnEnd, patchComment, sendReview } from '../src/review/service.ts';
 import type { AgentSession } from '../src/acp/hub.ts';
 
 function setup(repo: string) {
@@ -62,5 +62,15 @@ describe('review round continuation', () => {
     expect(rounds.get(round.id)!.round).toMatchObject({ status: 'done', stopReason: 'error: Agent is not ready' });
     expect(comments.get(cm.id)!.status).toBe('unverified');
     expect(done).toBe(2); // once when sent, once when settled
+  });
+
+  it('freezes comments while their round runs', async () => {
+    const { abs, cm, session } = setup('r-frozen');
+    (session as any).prompt = () => new Promise(() => {}); // turn still running
+    await sendReview(session, 'r-frozen', abs, 'c1', () => {});
+    const sent = comments.get(cm.id)!;
+    expect(sent.status).toBe('sent');
+    expect(patchComment(sent, { status: 'draft', body: 'changed my mind' })).toBeNull();
+    expect(comments.get(cm.id)).toMatchObject({ status: 'sent', body: 'use /helloworld' });
   });
 });

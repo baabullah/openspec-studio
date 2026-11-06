@@ -14,7 +14,7 @@ import * as openspec from './openspec.ts';
 import { hasOpenSpec, safeResolve, STUDIO_DIR } from './repos.ts';
 import { addRoot, browse, findRepos, removeRoot, repoPath, roots, seedRoots } from './workspace.ts';
 import { allowedHostnames, hostAllowed, requestAllowed } from './security.ts';
-import { closeRound, closeStaleRounds, createComment, onTurnEnd, sendReview } from './review/service.ts';
+import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
 import { actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
 import type { z } from 'zod';
 
@@ -201,12 +201,8 @@ app.patch('/api/comments/:id', async (c) => {
   const cm = comments.get(c.req.param('id'));
   if (!cm) return c.json({ error: 'not found' }, 404);
   const b = await body(c, commentPatch);
-  const next = { ...cm };
-  if (b.body !== undefined) next.body = b.body;
-  if (b.kind) next.kind = b.kind;
-  if (b.status === 'resolved') next.status = 'resolved';
-  if (b.status === 'draft') { next.status = 'draft'; next.roundId = null; } // reopen → goes out with the next review
-  comments.put(next);
+  const next = patchComment(cm, b);
+  if (!next) return c.json({ error: 'comment is in a running review' }, 409);
   reviewChanged(cm.repo, cm.change);
   return c.json(next);
 });
