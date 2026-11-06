@@ -44,13 +44,15 @@ interface State {
   toasts: Toast[];
   wsUp: boolean;
   addFolderOpen: boolean;
+  /** a turn finished while the tab was in the background (cleared when it gets focus) */
+  doneUnseen: boolean;
 }
 
 export const useStore = create<State>(() => ({
   // defaultAgent / agent come from /api/config (the server owns DEFAULT_AGENT)
   agents: [], defaultAgent: '', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: '',
   session: null, events: [], changes: [], archived: [], specs: [], browse: null, changesLoaded: false, change: null, file: null, content: '',
-  comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false,
+  comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false, doneUnseen: false,
 }));
 const set = useStore.setState;
 const get = useStore.getState;
@@ -113,6 +115,7 @@ function onServer(m: ServerMsg) {
     case 'event':
       set((s) => ({ events: appendEvent(s.events, m.entry) }));
       if (m.entry.event.kind === 'permission' || m.entry.event.kind === 'elicitation') notifyAttention();
+      if (m.entry.event.kind === 'turn_end') notifyTurnEnd(m.entry.event.stopReason);
       break;
     case 'artifacts_changed':
       clearTimeout(refreshTimer);
@@ -125,12 +128,38 @@ function onServer(m: ServerMsg) {
   }
 }
 
-function notifyAttention() {
-  if (document.hasFocus()) return;
+function notify(title: string, body: string, tag?: string) {
   try {
-    if ('Notification' in window && Notification.permission === 'granted') new Notification('OpenSpec Studio', { body: 'The agent needs your decision' });
+    if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body, tag });
   } catch { /* ignore */ }
 }
+
+function notifyAttention() {
+  if (document.hasFocus()) return;
+  notify('OpenSpec Studio', 'The agent needs your decision');
+}
+
+const STOP_TEXT: Record<string, string> = {
+  end_turn: 'Done', cancelled: 'Stopped', refusal: 'Stopped early (refusal)', max_tokens: 'Stopped: output token limit',
+  max_turn_requests: 'Stopped: step limit', error: 'Failed',
+};
+
+/** Long turns (build, review) finish while you are elsewhere: say so. */
+function notifyTurnEnd(stopReason: string) {
+  if (document.hasFocus()) return;
+  // the request this turn answered: the last "user" entry
+  const req = [...get().events].reverse().find((e) => e.event.kind === 'user')?.event;
+  const what = req?.kind === 'user' ? (req.label ?? req.text.split('\n')[0].slice(0, 80)) : 'The agent';
+  const repo = get().repos.find((r) => r.id === get().repo)?.name;
+  notify(`${STOP_TEXT[stopReason] ?? stopReason}${repo ? ` · ${repo}` : ''}`, what, 'turn-end');
+  set({ doneUnseen: true });
+}
+
+/** Ask once, from a click, so the browser shows the prompt. */
+function askNotificationPermission() {
+  try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
+}
+if (typeof window !== 'undefined') window.addEventListener('focus', () => { if (get().doneUnseen) set({ doneUnseen: false }); });
 
 // ---- actions -------------------------------------------------------------------
 let booted = false;
@@ -187,6 +216,7 @@ export function setAgent(agent: string) {
 }
 
 export function startAgent(resume = true) {
+  askNotificationPermission();
   const { repo, agent } = get();
   if (repo) wsSend({ type: 'start', repo, agent, resume });
 }

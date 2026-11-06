@@ -61,10 +61,11 @@ export function AgentPanel() {
   }, [items, repo]);
 
   // tab title badge when the agent waits for you
+  const doneUnseen = useStore((s) => s.doneUnseen);
   useEffect(() => {
-    document.title = pending.length ? `(${pending.length}) Needs you · OpenSpec Studio` : 'OpenSpec Studio';
+    document.title = pending.length ? `(${pending.length}) Needs you · OpenSpec Studio` : doneUnseen ? '✓ Agent finished · OpenSpec Studio' : 'OpenSpec Studio';
     if (pending.length && 'Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
-  }, [pending.length]);
+  }, [pending.length, doneUnseen]);
 
   const status = session ? STATUS[session.status] : null;
   const agentLabel = agents.find((a) => a.id === (session?.agent ?? agent))?.label ?? agent;
