@@ -147,7 +147,7 @@ app.get('/api/changes', async (c) => {
     openspec.listChanges(abs, (ch) => comments.list(repo, ch)),
     openspec.listArchived(abs),
   ]);
-  return c.json({ active, archived });
+  return c.json({ active, archived, specs: openspec.listSpecs(abs) });
 });
 
 app.get('/api/file', (c) => {

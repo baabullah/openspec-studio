@@ -1,4 +1,4 @@
-import type { AgentInfo, BrowseResult, ChangeSummary, LifecycleAction, ReviewComment, ReviewRound, Anchor, CommentKind, Workspace } from '../../../shared/protocol.ts';
+import type { AgentInfo, BrowseResult, ChangeSummary, SpecSummary, LifecycleAction, ReviewComment, ReviewRound, Anchor, CommentKind, Workspace } from '../../../shared/protocol.ts';
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, {
@@ -19,7 +19,7 @@ export const api = {
   removeRoot: (path: string) => req<Workspace>('DELETE', '/api/roots', { path }),
   browse: (path?: string | null) => req<BrowseResult>('GET', `/api/browse${path ? `?${q({ path })}` : ''}`),
   init: (repo: string, agent: string) => req<{ ok: boolean; output: string }>('POST', '/api/init', { repo, agent }),
-  changes: (repo: string) => req<{ active: ChangeSummary[]; archived: string[] }>('GET', `/api/changes?${q({ repo })}`),
+  changes: (repo: string) => req<{ active: ChangeSummary[]; archived: string[]; specs: SpecSummary[] }>('GET', `/api/changes?${q({ repo })}`),
   file: (repo: string, path: string) => req<{ content: string }>('GET', `/api/file?${q({ repo, path })}`),
   action: (repo: string, action: LifecycleAction, change?: string, text?: string) =>
     req<{ ok: true }>('POST', '/api/action', { repo, action, change, text }),

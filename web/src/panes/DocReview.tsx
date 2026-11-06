@@ -3,7 +3,7 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   CheckCheck, FileText, FolderPlus, GitCompareArrows, ListTodo, MessageSquarePlus, Send, Sparkles, Eye, EyeOff, Layers,
-  Play,
+  Play, BookOpen,
 } from 'lucide-react';
 import type { CommentKind, ReviewComment } from '../../../shared/protocol.ts';
 import { locate } from '../../../shared/anchor.ts';
@@ -14,6 +14,7 @@ import { Composer } from '../review/Composer.tsx';
 import { KINDS, STATUS_META, TO_CHECK } from '../review/kinds.tsx';
 import { lineHintOf, offsetAtPoint, paint, TextModel } from '../review/textModel.ts';
 import { FileDiffCard } from '../review/DiffView.tsx';
+import { ReadOnlyDoc } from './ReadOnlyDoc.tsx';
 
 const CHANGES_TAB = '__changes__';
 
@@ -323,7 +324,7 @@ function ReviewBar({ onGeneral }: { onGeneral: (scope: 'doc' | 'change') => void
 
 // ---- pane ---------------------------------------------------------------------------
 export function DocReview() {
-  const { repo, repos, roots, reposLoaded, changes, change, file, rounds, agents, agent, comments } = useStore();
+  const { repo, repos, roots, reposLoaded, changes, change, file, rounds, agents, agent, comments, browse, specs, content } = useStore();
   const [general, setGeneral] = useState<'doc' | 'change' | null>(null);
   const repoInfo = repos.find((r) => r.id === repo);
   const c = changes.find((x) => x.name === change);
@@ -352,6 +353,14 @@ export function DocReview() {
           {initing ? <Spinner /> : <Sparkles size={16} />} Initialize OpenSpec
         </Button>
       </Empty>
+    );
+  }
+
+  if (browse?.kind === 'spec') {
+    const sp = specs.find((x) => x.name === browse.name);
+    return (
+      <ReadOnlyDoc title={browse.name} content={content}
+        badges={<><Badge tone="info"><BookOpen size={12} /> main spec</Badge>{sp && <Badge>{sp.requirements} requirement{sp.requirements === 1 ? '' : 's'}</Badge>}</>} />
     );
   }
 

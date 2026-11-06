@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { runCmd } from './proc.ts';
-import type { ArtifactStatus, ChangeStage, ChangeSummary, ReviewComment } from '../../shared/protocol.ts';
+import type { ArtifactStatus, ChangeStage, ChangeSummary, ReviewComment, SpecSummary } from '../../shared/protocol.ts';
 
 const OPENSPEC = process.env.OPENSPEC_BIN || 'openspec';
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
@@ -136,6 +136,19 @@ export async function listChanges(repoAbs: string, commentsFor: (change: string)
     const base = { ...c, artifacts: st?.artifacts ?? [], isPlanningComplete: st?.isPlanningComplete ?? false, isComplete: st?.isComplete ?? false };
     return { ...base, files: changeFiles(repoAbs, c.name), openComments: open, stage: stageOf(base, open, reviewed) };
   });
+}
+
+/** Main specs (openspec/specs/<capability>/spec.md), with their requirement count. */
+export function listSpecs(repoAbs: string): SpecSummary[] {
+  const dir = path.join(repoAbs, 'openspec', 'specs');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && fs.existsSync(path.join(dir, e.name, 'spec.md')))
+    .map((e) => {
+      const text = readDoc(path.join(dir, e.name, 'spec.md')) ?? '';
+      return { name: e.name, file: `specs/${e.name}/spec.md`, requirements: (text.match(/^#{3,4}\s+Requirement:/gm) ?? []).length };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function listArchived(repoAbs: string): Promise<string[]> {

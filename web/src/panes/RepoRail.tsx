@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import {
   Archive, Check, ChevronDown, ChevronRight, Compass, FolderGit2, GitMerge, MessageSquare, MoreHorizontal, Pencil, Play,
-  Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X,
+  Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen,
 } from 'lucide-react';
 import type { ChangeStage, ChangeSummary, RepoInfo } from '../../../shared/protocol.ts';
-import { loadRepos, openAddFolder, openChange, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
+import { loadRepos, openAddFolder, openChange, openSpec, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
 import { Badge, Button, Chip, cx, Dialog, IconButton, Menu, MenuItem, timeAgo, useDismiss } from '../lib/ui.tsx';
 
 const STAGES: { id: ChangeStage; label: string; hint: string }[] = [
@@ -214,10 +214,11 @@ function ArchiveDialog({ name, onClose }: { name: string | null; onClose: () => 
 }
 
 export function RepoRail() {
-  const { changes, archived, repo, repos, changesLoaded } = useStore();
+  const { changes, archived, specs, browse, repo, repos, changesLoaded } = useStore();
   const [newOpen, setNewOpen] = useState(false);
   const [archiveName, setArchiveName] = useState<string | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [showSpecs, setShowSpecs] = useState(false);
   confirmArchive = setArchiveName;
   const grouped = useMemo(() => STAGES.map((s) => ({ ...s, items: changes.filter((c) => c.stage === s.id) })).filter((g) => g.items.length), [changes]);
   const hasOpenSpec = repos.find((r) => r.id === repo)?.openspec;
@@ -247,6 +248,29 @@ export function RepoRail() {
                 <div className="space-y-2">{g.items.map((c) => <ChangeCard key={c.name} c={c} />)}</div>
               </section>
             ))}
+            {specs.length > 0 && (
+              <section>
+                <button type="button" onClick={() => setShowSpecs(!showSpecs)} className="flex items-center gap-1 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-fg-2"
+                  title="The main specs: what the system does today (openspec/specs)">
+                  {showSpecs ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Specs <span className="font-normal">{specs.length}</span>
+                </button>
+                {showSpecs && (
+                  <ul className="mt-1.5 space-y-0.5">
+                    {specs.map((s) => (
+                      <li key={s.name}>
+                        <button type="button" onClick={() => openSpec(s.name)} title={`openspec/${s.file}`}
+                          className={cx('flex w-full items-center gap-2 rounded-lg px-2 py-1 text-left text-[12.5px] hover:bg-surface-2',
+                            browse?.kind === 'spec' && browse.name === s.name ? 'bg-accent-soft text-accent' : 'text-fg-2')}>
+                          <BookOpen size={13} className="shrink-0 opacity-70" />
+                          <span className="min-w-0 flex-1 truncate font-mono">{s.name}</span>
+                          <span className="text-[10.5px] tabular-nums text-muted">{s.requirements} req</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
             {archived.length > 0 && (
               <section>
                 <button onClick={() => setShowArchived(!showArchived)} className="flex items-center gap-1 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted hover:text-fg-2">

@@ -68,6 +68,9 @@ export interface ChangeSummary {
   openComments: number;
 }
 
+/** A capability's main spec: openspec/specs/<name>/spec.md */
+export interface SpecSummary { name: string; file: string; requirements: number }
+
 export type ChangeStage = 'draft' | 'review' | 'ready' | 'applying' | 'done';
 
 export type LifecycleAction = 'propose' | 'explore' | 'update' | 'apply' | 'sync' | 'archive';

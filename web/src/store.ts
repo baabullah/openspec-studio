@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentInfo, ChangeSummary, ClientMsg, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
+  AgentInfo, ChangeSummary, ClientMsg, SpecSummary, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
 } from '../../shared/protocol.ts';
 import { api } from './lib/api.ts';
 
@@ -8,6 +8,9 @@ const ls = {
   get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
   set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } },
 };
+
+/** A read-only document open in the middle pane instead of an active change. */
+export type Browse = { kind: 'spec'; name: string; file: string };
 
 export interface Toast { id: number; text: string; level: 'info' | 'error' }
 
@@ -24,6 +27,8 @@ interface State {
   events: LoggedEvent[];
   changes: ChangeSummary[];
   archived: string[];
+  specs: SpecSummary[];
+  browse: Browse | null;
   changesLoaded: boolean;
   change: string | null;
   file: string | null; // relative to change dir, or '__changes__' for the diff view
@@ -39,7 +44,7 @@ interface State {
 export const useStore = create<State>(() => ({
   // defaultAgent / agent come from /api/config (the server owns DEFAULT_AGENT)
   agents: [], defaultAgent: '', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: '',
-  session: null, events: [], changes: [], archived: [], changesLoaded: false, change: null, file: null, content: '',
+  session: null, events: [], changes: [], archived: [], specs: [], browse: null, changesLoaded: false, change: null, file: null, content: '',
   comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false,
 }));
 const set = useStore.setState;
@@ -140,7 +145,7 @@ export async function boot() {
 const applyWorkspace = (w: Workspace) => {
   set({ roots: w.roots, repos: w.repos, reposLoaded: true });
   const { repo } = get();
-  if (repo && !w.repos.some((r) => r.id === repo)) set({ repo: null, session: null, events: [], changes: [], change: null, file: null, content: '' });
+  if (repo && !w.repos.some((r) => r.id === repo)) set({ repo: null, session: null, events: [], changes: [], specs: [], browse: null, change: null, file: null, content: '' });
 };
 
 export async function loadRepos(refresh = false) {
@@ -165,7 +170,7 @@ export async function removeRoot(path: string) {
 export function selectRepo(id: string) {
   ls.set('repo', id);
   const agent = ls.get(`agent:${id}`) || get().defaultAgent;
-  set({ repo: id, agent, session: null, events: [], changes: [], archived: [], changesLoaded: false, change: null, file: null, content: '', comments: [], rounds: [] });
+  set({ repo: id, agent, session: null, events: [], changes: [], archived: [], specs: [], browse: null, changesLoaded: false, change: null, file: null, content: '', comments: [], rounds: [] });
   wsSend({ type: 'subscribe', repo: id });
   loadChanges();
 }
@@ -219,14 +224,16 @@ export async function loadChanges() {
   if (!repo) return;
   const r = await guard(api.changes(repo));
   if (!r || get().repo !== repo) return;
-  set({ changes: r.active, archived: r.archived, changesLoaded: true });
+  set({ changes: r.active, archived: r.archived, specs: r.specs, changesLoaded: true });
+  const { browse } = get();
+  if (browse?.kind === 'spec' && !r.specs.some((x) => x.name === browse.name)) set({ browse: null, content: '' });
   const { change } = get();
   if (change && !r.active.some((c) => c.name === change)) set({ change: null, file: null, content: '' });
 }
 
 export async function openChange(name: string, file?: string) {
   const c = get().changes.find((x) => x.name === name);
-  set({ change: name, file: file ?? c?.files[0] ?? null, content: '', focusComment: null });
+  set({ browse: null, change: name, file: file ?? c?.files[0] ?? null, content: '', focusComment: null });
   await Promise.all([reloadFile(), loadReview()]);
 }
 
@@ -235,11 +242,26 @@ export async function openFile(file: string) {
   await reloadFile();
 }
 
+/** Path (relative to <repo>/openspec) of the document shown in the middle pane, if any. */
+function docPath(): string | null {
+  const { change, file, browse } = get();
+  if (browse) return browse.file;
+  if (!change || !file || file === '__changes__') return null;
+  return `changes/${change}/${file}`;
+}
+
 async function reloadFile() {
-  const { repo, change, file } = get();
-  if (!repo || !change || !file || file === '__changes__') return;
-  const r = await api.file(repo, `changes/${change}/${file}`).catch(() => null);
-  if (get().file === file && get().change === change) set({ content: r?.content ?? '' });
+  const { repo } = get();
+  const path = docPath();
+  if (!repo || !path) return;
+  const r = await api.file(repo, path).catch(() => null);
+  if (get().repo === repo && docPath() === path) set({ content: r?.content ?? '' });
+}
+
+/** Open a main spec, read-only. */
+export async function openSpec(name: string) {
+  set({ browse: { kind: 'spec', name, file: `specs/${name}/spec.md` }, change: null, file: null, content: '', comments: [], rounds: [], focusComment: null });
+  await reloadFile();
 }
 
 export async function loadReview() {
