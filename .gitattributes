@@ -1,0 +1,4 @@
+# Keep LF in the repo and the working tree on every OS (Windows editors/WSL
+# otherwise turn every file into a CRLF "modification").
+* text=auto eol=lf
+*.png binary
