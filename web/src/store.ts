@@ -62,12 +62,21 @@ function connectWs() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
   ws.onopen = () => { retry = 0; set({ wsUp: true }); const r = get().repo; if (r) wsSend({ type: 'subscribe', repo: r }); };
   ws.onclose = () => { set({ wsUp: false }); setTimeout(connectWs, Math.min(5000, 500 * 2 ** retry++)); };
-  ws.onmessage = (ev) => onServer(JSON.parse(ev.data) as ServerMsg);
+  ws.onmessage = (ev) => {
+    let m: ServerMsg;
+    try { m = JSON.parse(ev.data); } catch { console.warn('ignored a malformed server message'); return; }
+    onServer(m);
+  };
 }
 export function wsSend(m: ClientMsg) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
   else toast('Not connected to the studio server', 'error');
 }
+
+// The server replays at most this many events (db.ts events.list); keep the live
+// transcript to the same window so a long session doesn't slow the page down.
+const MAX_EVENTS = 2000;
+const appendEvent = (list: LoggedEvent[], e: LoggedEvent) => (list.length >= MAX_EVENTS ? [...list.slice(list.length - MAX_EVENTS + 1), e] : [...list, e]);
 
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 function onServer(m: ServerMsg) {
@@ -81,7 +90,7 @@ function onServer(m: ServerMsg) {
       break;
     case 'replay': set({ events: m.entries }); break;
     case 'event':
-      set((s) => ({ events: [...s.events, m.entry] }));
+      set((s) => ({ events: appendEvent(s.events, m.entry) }));
       if (m.entry.event.kind === 'permission' || m.entry.event.kind === 'elicitation') notifyAttention();
       break;
     case 'artifacts_changed':
