@@ -39,7 +39,7 @@ export function App() {
       <ErrorBoundary name="Agent panel" resetKey={repo}><AgentPanel /></ErrorBoundary>
       <div className="fixed bottom-3 left-3 z-40 flex items-center gap-1">
         <ThemeToggle />
-        {!wsUp && <span className="flex items-center gap-1 rounded-full bg-bad-soft px-2 py-0.5 text-[11px] text-bad"><WifiOff size={11} /> server offline</span>}
+        {!wsUp && <span className="flex items-center gap-1 rounded-full bg-bad-soft px-2 py-0.5 text-[11px] text-bad"><WifiOff size={11} /> server offline · reconnecting…</span>}
       </div>
       <Toasts />
       <AddFolderDialog />

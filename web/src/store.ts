@@ -56,11 +56,20 @@ const guard = async <T,>(p: Promise<T>): Promise<T | undefined> => { try { retur
 // ---- websocket -----------------------------------------------------------------
 let ws: WebSocket | null = null;
 let retry = 0;
+let connectedOnce = false;
 const readyWaiters: (() => void)[] = [];
 
 function connectWs() {
   ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`);
-  ws.onopen = () => { retry = 0; set({ wsUp: true }); const r = get().repo; if (r) wsSend({ type: 'subscribe', repo: r }); };
+  ws.onopen = () => {
+    retry = 0;
+    set({ wsUp: true });
+    const r = get().repo;
+    if (r) wsSend({ type: 'subscribe', repo: r }); // also replays the agent transcript
+    // while we were offline, file changes and review updates were broadcast to no one
+    if (connectedOnce) { loadRepos(); loadChanges(); loadReview(); reloadFile(); }
+    connectedOnce = true;
+  };
   ws.onclose = () => { set({ wsUp: false }); setTimeout(connectWs, Math.min(5000, 500 * 2 ** retry++)); };
   ws.onmessage = (ev) => {
     let m: ServerMsg;
@@ -70,7 +79,7 @@ function connectWs() {
 }
 export function wsSend(m: ClientMsg) {
   if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
-  else toast('Not connected to the studio server', 'error');
+  else toast('Not connected to the studio server. Reconnecting…', 'error');
 }
 
 // The server replays at most this many events (db.ts events.list); keep the live
