@@ -4,7 +4,7 @@ import type { ChildProcess } from 'node:child_process';
 import { killTree, spawnCmd } from '../proc.ts';
 import { Readable, Writable } from 'node:stream';
 import * as acp from '@agentclientprotocol/sdk';
-import type { AgentEvent, ConfigOption, LoggedEvent, SessionState, SessionStatus } from '../../../shared/protocol.ts';
+import type { AgentEvent, ConfigOption, ContextUsage, LoggedEvent, SessionState, SessionStatus, TurnUsage } from '../../../shared/protocol.ts';
 import type { AgentDef } from '../agents.ts';
 import { events, sessions } from '../db.ts';
 import { safeResolve, STUDIO_VERSION } from '../repos.ts';
@@ -23,6 +23,24 @@ function flattenConfig(raw: any[] | null | undefined): ConfigOption[] {
   }));
 }
 
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+
+/** ACP usage_update → what the panel shows; null when the numbers are unusable. */
+export function toContextUsage(u: any): ContextUsage | null {
+  const used = num(u?.used), size = num(u?.size);
+  if (used === null || !size) return null;
+  const amount = num(u?.cost?.amount);
+  return { used, size, cost: amount !== null && typeof u.cost.currency === 'string' ? { amount, currency: u.cost.currency } : null };
+}
+
+/** ACP PromptResponse.usage (unstable, optional) → TurnUsage; null when absent or malformed. */
+export function toTurnUsage(u: any): TurnUsage | null {
+  const input = num(u?.inputTokens), output = num(u?.outputTokens);
+  if (input === null || output === null) return null;
+  const cacheRead = num(u.cachedReadTokens), cacheWrite = num(u.cachedWriteTokens), thought = num(u.thoughtTokens);
+  return { input, output, cacheRead, cacheWrite, thought, total: num(u.totalTokens) ?? input + output + (cacheRead ?? 0) + (cacheWrite ?? 0) };
+}
+
 /** Corporate shells often only export lowercase proxy vars; mirror them so every HTTP client sees them. */
 function agentEnv(extra?: Record<string, string>) {
   const env: Record<string, string | undefined> = { ...process.env, ...extra };
@@ -34,6 +52,7 @@ export class AgentSession {
   status: SessionStatus = 'starting';
   sessionId: string | null = null;
   configOptions: ConfigOption[] = [];
+  context: ContextUsage | null = null;
   error?: string;
   private proc: ChildProcess;
   private conn: acp.ClientConnection;
@@ -136,6 +155,8 @@ export class AgentSession {
 
   private onUpdate(u: any) {
     if (u.sessionUpdate === 'config_option_update') { this.configOptions = flattenConfig(u.configOptions); this.changed(); return; }
+    // state, not transcript: it can arrive many times a turn (also while a resumed session replays)
+    if (u.sessionUpdate === 'usage_update') { const c = toContextUsage(u); if (c) { this.context = c; this.changed(); } return; }
     if (this.replaying) return; // history from session/load is already in our event log
     if (['available_commands_update', 'usage_update', 'session_info_update', 'current_mode_update'].includes(u.sessionUpdate)) return;
     if (u.sessionUpdate === 'agent_message_chunk' && u.content?.type === 'text') this.reply += u.content.text;
@@ -185,15 +206,17 @@ export class AgentSession {
     this.emit({ kind: 'user', text, label });
     this.changed();
     let stopReason = 'error';
+    let usage: TurnUsage | null = null;
     try {
       const r = await this.conn.agent.request('session/prompt', { sessionId: this.sessionId!, prompt: [{ type: 'text', text }] });
       stopReason = r.stopReason;
+      usage = toTurnUsage((r as any).usage);
     } catch (e: any) {
       this.emit({ kind: 'notice', level: 'error', text: String(e?.message || e) });
     } finally {
       if (this.status === 'busy') this.status = 'ready';
       this.cancelPending();
-      this.emit({ kind: 'turn_end', stopReason });
+      this.emit({ kind: 'turn_end', stopReason, ...(usage ? { usage } : {}) });
       this.changed();
     }
     return { stopReason, reply: this.reply };
@@ -224,7 +247,7 @@ export class AgentSession {
   state(): SessionState {
     return {
       repo: this.repo, agent: this.agent.id, status: this.status, sessionId: this.sessionId,
-      configOptions: this.configOptions, pendingInteractions: this.pending.size, error: this.error,
+      configOptions: this.configOptions, pendingInteractions: this.pending.size, error: this.error, context: this.context,
     };
   }
 

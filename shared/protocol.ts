@@ -49,6 +49,20 @@ export interface SessionState {
   configOptions: ConfigOption[];
   pendingInteractions: number;
   error?: string;
+  /** context window use and session cost, as the agent last reported them (ACP usage_update) */
+  context: ContextUsage | null;
+}
+
+export interface ContextUsage { used: number; size: number; cost: { amount: number; currency: string } | null }
+
+/** Tokens for one prompt turn, as the agent reported them (ACP PromptResponse.usage; optional per agent). */
+export interface TurnUsage {
+  input: number;
+  output: number;
+  cacheRead: number | null;
+  cacheWrite: number | null;
+  thought: number | null;
+  total: number;
 }
 
 // ---- OpenSpec ---------------------------------------------------------------
@@ -152,7 +166,7 @@ export type AgentEvent =
   | { kind: 'permission'; id: string; toolCall: any; options: { optionId: string; name: string; kind: string }[] }
   | { kind: 'elicitation'; id: string; message: string; schema: any }
   | { kind: 'interaction_resolved'; id: string; summary: string }
-  | { kind: 'turn_end'; stopReason: string }
+  | { kind: 'turn_end'; stopReason: string; usage?: TurnUsage }
   | { kind: 'file_write'; path: string }
   | { kind: 'notice'; level: 'info' | 'error'; text: string };
 
