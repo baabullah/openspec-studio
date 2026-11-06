@@ -67,7 +67,7 @@ function ReviewCanvas() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [positions, setPositions] = useState<Record<string, { start: number; end: number; top: number; fuzzy: boolean }>>({});
   const cardRefs = useRef(new Map<string, HTMLDivElement>());
-  const [, force] = useState(0);
+  const [layoutTick, force] = useState(0); // bumped by the ResizeObserver
 
   const visible = comments.filter((c) => c.file === file && (showResolved || c.status !== 'resolved'));
   const [narrow, setNarrow] = useState(false);
@@ -75,11 +75,16 @@ function ReviewCanvas() {
   const general = visible.filter((c) => !anchored.includes(c));
   const located = visible.filter((c) => c.anchor && positions[c.id]); // for click-to-focus in both modes
   const changeLevel = comments.filter((c) => c.file === null && (showResolved || c.status !== 'resolved'));
+  const resolvedCount = comments.filter((c) => c.file === file && c.status === 'resolved').length;
+  // the Notes block sits above the document, so showing/hiding it moves every line
+  const notesShown = general.length > 0 || changeLevel.length > 0 || resolvedCount > 0;
 
   const relTop = useCallback((r: DOMRect) => r.top - wrapRef.current!.getBoundingClientRect().top, []);
 
-  // rebuild the text model and locate comments whenever the rendered doc changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: content is a trigger: the DOM under docRef is re-rendered from it
+  // rebuild the text model and locate comments whenever the rendered doc changes or
+  // moves: a resize reflows the text, and on first load the comments sit in Notes
+  // (no positions yet) until this runs, so the doc shifts up once they move out
+  // biome-ignore lint/correctness/useExhaustiveDependencies: content, layoutTick, notesShown and narrow are triggers: they change where the text is
   useLayoutEffect(() => {
     if (!docRef.current) return;
     const model = new TextModel(docRef.current);
@@ -100,7 +105,7 @@ function ReviewCanvas() {
     }
     paint(groups);
     setPositions(pos);
-  }, [content, comments, file, focusComment, showResolved, relTop]);
+  }, [content, comments, file, focusComment, showResolved, relTop, layoutTick, notesShown, narrow]);
 
   useEffect(() => () => paint({ 'c-draft': [], 'c-sent': [], 'c-done': [], 'c-focus': [] }), []);
 
@@ -186,8 +191,6 @@ function ReviewCanvas() {
       .sort((a, b) => (positions[a.id].end - positions[a.id].start) - (positions[b.id].end - positions[b.id].start));
     useStore.setState({ focusComment: hits[0]?.id ?? null });
   };
-
-  const resolvedCount = comments.filter((c) => c.file === file && c.status === 'resolved').length;
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto" onMouseDown={() => { if (!draft) setSel(null); }}>
