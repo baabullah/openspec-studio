@@ -68,7 +68,12 @@ export interface ChangeSummary {
   openComments: number;
   /** `openspec validate` result; null when the CLI gave no answer */
   validation: ChangeValidation | null;
+  /** artifacts written before something they depend on changed */
+  stale: StaleArtifact[];
 }
+
+/** `id` (e.g. "tasks") may be out of date: `because` (e.g. ["proposal"]) changed after it was written. */
+export interface StaleArtifact { id: string; because: string[] }
 
 export interface ValidationIssue { level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }
 export interface ChangeValidation { valid: boolean; issues: ValidationIssue[] }

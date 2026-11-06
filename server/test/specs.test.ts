@@ -35,3 +35,30 @@ describe('archived changes', () => {
     expect(archivedFiles(repo, 'missing')).toEqual([]);
   });
 });
+
+describe('computeStaleness', async () => {
+  const { computeStaleness } = await import('../src/openspec.ts');
+  // OpenSpec's spec-driven graph
+  const graph = [
+    { id: 'proposal', requires: [] }, { id: 'specs', requires: ['proposal'] },
+    { id: 'design', requires: ['proposal'] }, { id: 'tasks', requires: ['specs', 'design'] },
+  ];
+  const at = (m: Record<string, number>) => (id: string) => m[id] ?? null;
+
+  it('is quiet when every artifact is newer than what it needs', () => {
+    expect(computeStaleness(graph, at({ proposal: 0, specs: 10_000, design: 10_000, tasks: 20_000 }))).toEqual([]);
+  });
+
+  it('flags what depends on a changed artifact, and what depends on that', () => {
+    expect(computeStaleness(graph, at({ proposal: 30_000, specs: 10_000, design: 10_000, tasks: 20_000 }))).toEqual([
+      { id: 'specs', because: ['proposal'] }, { id: 'design', because: ['proposal'] }, { id: 'tasks', because: ['specs', 'design'] },
+    ]);
+    // only design was edited after tasks
+    expect(computeStaleness(graph, at({ proposal: 0, specs: 10_000, design: 30_000, tasks: 20_000 }))).toEqual([{ id: 'tasks', because: ['design'] }]);
+  });
+
+  it('treats files written within a second as one generation, and ignores missing ones', () => {
+    expect(computeStaleness(graph, at({ proposal: 1_500, specs: 1_000, design: 1_200, tasks: 1_100 }))).toEqual([]);
+    expect(computeStaleness(graph, at({ proposal: 30_000, specs: 10_000 }))).toEqual([{ id: 'specs', because: ['proposal'] }]);
+  });
+});

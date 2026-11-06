@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { runCmd } from './proc.ts';
-import type { ArtifactStatus, ChangeStage, ChangeSummary, ChangeValidation, ReviewComment, SpecSummary } from '../../shared/protocol.ts';
+import type { ArtifactStatus, ChangeStage, ChangeSummary, ChangeValidation, ReviewComment, SpecSummary, StaleArtifact } from '../../shared/protocol.ts';
 
 const OPENSPEC = process.env.OPENSPEC_BIN || 'openspec';
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
@@ -128,6 +128,45 @@ async function cliView(repoAbs: string) {
   return { list, status, validate };
 }
 
+// A checkout or copy writes files in a burst; edits within this window count as one generation.
+const SAME_GENERATION_MS = 1000;
+
+/**
+ * Artifacts that may be out of date, from OpenSpec's own dependency graph
+ * (`requires` in `openspec status`): one is stale when something it requires
+ * was modified after it, or is itself stale. `because` names the direct causes.
+ */
+export function computeStaleness(artifacts: Pick<ArtifactStatus, 'id' | 'requires'>[], mtimeOf: (id: string) => number | null): StaleArtifact[] {
+  const byId = new Map(artifacts.map((a) => [a.id, a]));
+  const memo = new Map<string, string[] | null>();
+  const causes = (id: string, seen = new Set<string>()): string[] | null => {
+    if (memo.has(id)) return memo.get(id)!;
+    const a = byId.get(id);
+    const own = mtimeOf(id);
+    if (!a || own === null || seen.has(id)) return null;
+    seen.add(id);
+    const out = a.requires.filter((r) => {
+      const up = mtimeOf(r);
+      return (up !== null && up - own > SAME_GENERATION_MS) || causes(r, seen) !== null;
+    });
+    const res = out.length ? out : null;
+    memo.set(id, res);
+    return res;
+  };
+  return artifacts.flatMap((a) => { const because = causes(a.id); return because ? [{ id: a.id, because }] : []; });
+}
+
+/** Newest mtime of the files an artifact's outputPath covers (e.g. "specs/**\/*.md"), or null when none exist. */
+function artifactMtime(repoAbs: string, change: string, files: string[], outputPath: string): number | null {
+  const star = outputPath.indexOf('*');
+  const matching = star < 0 ? files.filter((f) => f === outputPath) : files.filter((f) => f.startsWith(outputPath.slice(0, star)));
+  let newest: number | null = null;
+  for (const f of matching) {
+    try { newest = Math.max(newest ?? 0, fs.statSync(path.join(changeDir(repoAbs, change), f)).mtimeMs); } catch { /* vanished */ }
+  }
+  return newest;
+}
+
 export async function listChanges(repoAbs: string, commentsFor: (change: string) => ReviewComment[]): Promise<ChangeSummary[]> {
   if (!fs.existsSync(path.join(repoAbs, 'openspec', 'changes'))) return [];
   const { list, status, validate } = await cliView(repoAbs);
@@ -139,7 +178,11 @@ export async function listChanges(repoAbs: string, commentsFor: (change: string)
     const open = cs.filter((x) => x.status !== 'resolved').length;
     const reviewed = cs.length > 0 && open === 0;
     const base = { ...c, artifacts: st?.artifacts ?? [], isPlanningComplete: st?.isPlanningComplete ?? false, isComplete: st?.isComplete ?? false };
-    return { ...base, files: changeFiles(repoAbs, c.name), openComments: open, stage: stageOf(base, open, reviewed), validation: validation.get(c.name) ?? null };
+    const files = changeFiles(repoAbs, c.name);
+    const done = base.artifacts.filter((a) => a.status === 'done');
+    const out = new Map(done.map((a) => [a.id, a.outputPath]));
+    const stale = computeStaleness(done, (id) => (out.has(id) ? artifactMtime(repoAbs, c.name, files, out.get(id)!) : null));
+    return { ...base, files, openComments: open, stage: stageOf(base, open, reviewed), validation: validation.get(c.name) ?? null, stale };
   });
 }
 
