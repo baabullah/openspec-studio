@@ -139,7 +139,8 @@ export function AgentPanel() {
 
       {/* decisions waiting for you are pinned so they are never scrolled away */}
       {pending.length > 0 && (
-        <div className="space-y-2 border-t border-warn/40 bg-warn-soft/40 px-3 py-2.5">
+        // capped so the transcript and the chat box stay visible even with several tall cards
+        <div className="max-h-[60%] shrink-0 space-y-2 overflow-y-auto border-t border-warn/40 bg-warn-soft/40 px-3 py-2.5">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-warn">Needs your decision</div>
           {pending.map((it) => it.type === 'permission' ? <PermissionCard key={it.key} it={it} compact /> : it.type === 'elicitation' ? <ElicitationCard key={it.key} it={it} /> : null)}
         </div>
