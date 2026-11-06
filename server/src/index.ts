@@ -34,7 +34,7 @@ const HOST = process.env.HOST || '127.0.0.1'; // the agent can run code: keep th
 // ---- realtime fan-out --------------------------------------------------------
 const subscribers = new Map<string, Set<WebSocket>>(); // repo -> sockets
 const send = (ws: WebSocket, m: ServerMsg) => ws.readyState === ws.OPEN && ws.send(JSON.stringify(m));
-const broadcast = (repo: string, m: ServerMsg) => subscribers.get(repo)?.forEach((ws) => send(ws, m));
+const broadcast = (repo: string, m: ServerMsg) => subscribers.get(repo)?.forEach((ws) => { send(ws, m); });
 
 const hub = new Hub({
   onEvent: (repo, entry) => broadcast(repo, { type: 'event', repo, entry }),
@@ -223,7 +223,7 @@ app.post('/api/review/send', async (c) => {
   const { repo, abs } = repoOf(c, b.repo);
   if (!validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
   const s = hub.get(repo);
-  if (!s || s.status !== 'ready') return c.json({ error: s ? 'agent is busy' : 'connect an agent first' }, 409);
+  if (s?.status !== 'ready') return c.json({ error: s ? 'agent is busy' : 'connect an agent first' }, 409);
   const round = await sendReview(s, repo, abs, b.change, () => reviewChanged(repo, b.change));
   return c.json(round);
 });
@@ -320,7 +320,7 @@ const shutdown = async () => {
   stopping = true;
   hub.stopAll();
   for (const t of debounce.values()) clearTimeout(t);
-  wss.clients.forEach((ws) => ws.terminate());
+  for (const ws of wss.clients) ws.terminate();
   wss.close();
   server.close();
   // chokidar polling (WSL /mnt/*) keeps timers alive until closed

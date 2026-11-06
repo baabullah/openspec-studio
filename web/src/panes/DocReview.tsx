@@ -16,7 +16,6 @@ import { lineHintOf, offsetAtPoint, paint, TextModel } from '../review/textModel
 import { FileDiffCard } from '../review/DiffView.tsx';
 
 const CHANGES_TAB = '__changes__';
-const BLOCKS = 'h1,h2,h3,h4,h5,h6,p,li,blockquote,pre,table';
 
 // ---- rendered markdown with hover reactions ------------------------------------
 function ReactionBar({ onPick }: { onPick: (k: CommentKind, el: HTMLElement) => void }) {
@@ -77,9 +76,10 @@ function ReviewCanvas() {
   const located = visible.filter((c) => c.anchor && positions[c.id]); // for click-to-focus in both modes
   const changeLevel = comments.filter((c) => c.file === null && (showResolved || c.status !== 'resolved'));
 
-  const relTop = (r: DOMRect) => r.top - wrapRef.current!.getBoundingClientRect().top;
+  const relTop = useCallback((r: DOMRect) => r.top - wrapRef.current!.getBoundingClientRect().top, []);
 
   // rebuild the text model and locate comments whenever the rendered doc changes
+  // biome-ignore lint/correctness/useExhaustiveDependencies: content is a trigger: the DOM under docRef is re-rendered from it
   useLayoutEffect(() => {
     if (!docRef.current) return;
     const model = new TextModel(docRef.current);
@@ -100,7 +100,7 @@ function ReviewCanvas() {
     }
     paint(groups);
     setPositions(pos);
-  }, [content, comments, file, focusComment, showResolved]);
+  }, [content, comments, file, focusComment, showResolved, relTop]);
 
   useEffect(() => () => paint({ 'c-draft': [], 'c-sent': [], 'c-done': [], 'c-focus': [] }), []);
 
@@ -130,6 +130,7 @@ function ReviewCanvas() {
     sorted.forEach((x, i) => { const el = cardRefs.current.get(x.c.id); if (el) el.style.top = `${tops[i]}px`; });
   });
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: saveComment is a fresh closure each render but only reads repo/change/file
   const onReact = useCallback((kind: CommentKind, el: HTMLElement) => {
     const m = modelRef.current;
     if (!m || !el) return;
@@ -141,7 +142,7 @@ function ReviewCanvas() {
     const rect = el.getBoundingClientRect();
     setDraft({ kind, anchor, top: relTop(rect) + Math.min(rect.height, 28), left: Math.max(0, rect.left - wrapRef.current!.getBoundingClientRect().left + 24) });
     getSelection()?.removeAllRanges();
-  }, [change, file, repo]);
+  }, [change, file, repo, relTop]);
 
   const saveComment = (kind: CommentKind, body: string, anchor: ReviewComment['anchor']) => {
     if (!repo || !change) return;
@@ -294,12 +295,12 @@ function ReviewBar({ onGeneral }: { onGeneral: (scope: 'doc' | 'change') => void
         <Layers size={14} /><span className="hidden @lg:inline">Note on whole change</span><span className="@lg:hidden">Change note</span></Button>
       <div className="flex-1" />
       {toCheck.length > 0 && (
-        <button className="flex items-center gap-1 text-xs text-ok hover:underline" onClick={() => toCheck.forEach((c) => c.status === 'addressed' && review.patch(c.id, { status: 'resolved' }))}
+        <button className="flex items-center gap-1 text-xs text-ok hover:underline" onClick={() => { for (const c of toCheck) if (c.status === 'addressed') review.patch(c.id, { status: 'resolved' }); }}
           title="Resolve every comment the agent reports as addressed">
           <CheckCheck size={14} /> {toCheck.length} to check · resolve addressed
         </button>
       )}
-      {running && running.stopReason && session?.status !== 'busy' ? (
+      {running?.stopReason && session?.status !== 'busy' ? (
         // the review turn stopped early (refusal, error, limits): edits made on Continue still count
         <span className="flex flex-wrap items-center gap-2 text-[13px]">
           <span className="text-warn" title="The verdicts and diff will be collected when the agent finishes">Revision stopped ({running.stopReason.replace(/_/g, ' ')})</span>

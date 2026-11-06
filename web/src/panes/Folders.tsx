@@ -23,6 +23,7 @@ export function AddFolderDialog() {
     } catch (e) { setError((e as Error).message); }
     setBusy(false);
   };
+  // biome-ignore lint/correctness/useExhaustiveDependencies: load the start page each time the dialog opens, not when go() is recreated
   useEffect(() => { if (open) go(null); }, [open]);
 
   const close = () => { openAddFolder(false); setCur(null); setError(null); };

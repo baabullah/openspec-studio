@@ -18,7 +18,7 @@ function rows(before: string, after: string): Row[] {
     // pair a removed block with the added block that follows, for word-level highlight
     const other = p.removed ? (parts[i + 1]?.added ? parts[i + 1] : null) : p.added ? (parts[i - 1]?.removed ? parts[i - 1] : null) : null;
     const pairLines = other ? other.value.replace(/\n$/, '').split('\n') : null;
-    lines.forEach((text, j) => flat.push({ t, text, pair: pairLines?.[j] }));
+    lines.forEach((text, j) => { flat.push({ t, text, pair: pairLines?.[j] }); });
   }
   // collapse long unchanged runs
   const out: Row[] = [];

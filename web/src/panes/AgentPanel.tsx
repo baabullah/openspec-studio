@@ -50,7 +50,9 @@ export function AgentPanel() {
   const hasOpenSpec = repos.find((r) => r.id === repo)?.openspec;
 
   // follow the stream; jump to the newest message when a repo's history loads
+  // biome-ignore lint/correctness/useExhaustiveDependencies: repo is the trigger, not an input
   useEffect(() => { stick.current = true; }, [repo]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: items/repo are triggers: scroll after new output renders
   useLayoutEffect(() => {
     const el = scroller.current;
     if (!el || !stick.current) return;

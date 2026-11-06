@@ -125,7 +125,7 @@ export function finishRound(roundId: string, repoAbs: string, reply: string, sto
 
   for (const id of round.commentIds) {
     const c = comments.get(id);
-    if (!c || c.status !== 'sent') continue;
+    if (c?.status !== 'sent') continue;
     const res = byId.get(id);
     const src = c.file ? after[c.file] : undefined;
     comments.put({

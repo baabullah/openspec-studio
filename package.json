@@ -13,9 +13,13 @@
     "build": "npm -w web run build",
     "start": "npm -w server run start",
     "test": "npm -w server run test && npm -w web run test",
-    "typecheck": "npm -w server run typecheck && npm -w web run typecheck"
+    "typecheck": "npm -w server run typecheck && npm -w web run typecheck",
+    "lint": "biome lint ."
   },
   "engines": {
     "node": ">=22.13"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.6.6"
   }
 }

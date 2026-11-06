@@ -95,7 +95,7 @@ function onServer(m: ServerMsg) {
   switch (m.type) {
     case 'session':
       set({ session: m.session });
-      if (m.session?.status === 'ready') readyWaiters.splice(0).forEach((f) => f());
+      if (m.session?.status === 'ready') for (const f of readyWaiters.splice(0)) f();
       set((s) => ({ repos: s.repos.map((r) => (r.id === m.repo ? { ...r, session: m.session } : r)) }));
       break;
     case 'replay': set({ events: m.entries }); break;
