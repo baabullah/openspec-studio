@@ -53,10 +53,12 @@ export async function sendReview(session: AgentSession, repo: string, repoAbs: s
   const prompt = composeReview(session.agent.command('update', change), change, list);
   const n = list.length;
   // don't await: the turn can take minutes; finish the round when it ends
-  session.prompt(prompt, `Review sent · ${n} item${n > 1 ? 's' : ''} · ${change}`).then(({ stopReason, reply }) => {
-    onTurnEnd(repo, repoAbs, stopReason, reply);
-    onDone();
-  });
+  // prompt() rejects when the session is not ready (e.g. it exited meanwhile); an
+  // unhandled rejection would take the whole server down, so settle the round instead
+  session.prompt(prompt, `Review sent · ${n} item${n > 1 ? 's' : ''} · ${change}`)
+    .then(({ stopReason, reply }) => onTurnEnd(repo, repoAbs, stopReason, reply))
+    .catch((e) => finishRound(round.id, repoAbs, '', `error: ${(e as Error)?.message ?? e}`))
+    .finally(onDone);
   return round;
 }
 

@@ -52,4 +52,15 @@ describe('review round continuation', () => {
     expect(comments.get(cm.id)!.status).toBe('unverified');
     expect(onTurnEnd('r-close', abs, 'end_turn', '')).toBeNull();
   });
+
+  it('settles the round instead of crashing when the prompt is rejected', async () => {
+    const { abs, cm, session } = setup('r-reject');
+    (session as any).prompt = async () => { throw new Error('Agent is not ready'); };
+    let done = 0;
+    const round = await sendReview(session, 'r-reject', abs, 'c1', () => { done++; });
+    await flush();
+    expect(rounds.get(round.id)!.round).toMatchObject({ status: 'done', stopReason: 'error: Agent is not ready' });
+    expect(comments.get(cm.id)!.status).toBe('unverified');
+    expect(done).toBe(2); // once when sent, once when settled
+  });
 });
