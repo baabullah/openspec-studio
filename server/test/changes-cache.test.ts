@@ -11,6 +11,7 @@ const bin = path.join(dir, 'openspec');
 fs.writeFileSync(bin, `#!/bin/sh
 echo "$1" >> "${counter}"
 if [ "$1" = list ]; then echo '{"changes":[{"name":"c1","completedTasks":0,"totalTasks":1,"lastModified":"x","status":"in-progress"}]}'
+elif [ "$1" = validate ]; then echo '{"items":[{"id":"c1","type":"change","valid":false,"issues":[{"level":"ERROR","path":"x/spec.md","message":"must include at least one scenario"}]}]}'; exit 1
 else echo '{"changes":[{"changeName":"c1","artifacts":[],"isPlanningComplete":true,"isComplete":false}]}'; fi
 `, { mode: 0o755 });
 process.env.OPENSPEC_BIN = bin;
@@ -27,17 +28,19 @@ describe.skipIf(process.platform === 'win32')('change list CLI cache', () => {
     let comments = [comment('addressed')];
     const first = await listChanges(repo, () => comments);
     expect(first[0]).toMatchObject({ name: 'c1', openComments: 1, stage: 'review' });
-    expect(runs()).toBe(2); // list + status
+    // validate exits 1 when something is invalid; its report is still used
+    expect(first[0].validation).toEqual({ valid: false, issues: [{ level: 'ERROR', path: 'x/spec.md', message: 'must include at least one scenario' }] });
+    expect(runs()).toBe(3); // list + status + validate
 
     // resolving the last comment: no file changed, so no CLI run, but the stage follows at once
     comments = [comment('resolved')];
     const second = await listChanges(repo, () => comments);
     expect(second[0]).toMatchObject({ openComments: 0, stage: 'ready' });
-    expect(runs()).toBe(2);
+    expect(runs()).toBe(3);
 
     // the agent edits an artifact: the CLI runs again
     fs.writeFileSync(path.join(repo, 'openspec', 'changes', 'c1', 'tasks.md'), '- [x] 1.1 do it\n- [ ] 1.2 more\n');
     await listChanges(repo, () => comments);
-    expect(runs()).toBe(4);
+    expect(runs()).toBe(6);
   });
 });

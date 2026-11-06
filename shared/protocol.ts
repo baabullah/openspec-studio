@@ -66,7 +66,12 @@ export interface ChangeSummary {
   files: string[]; // markdown files relative to the change dir
   stage: ChangeStage;
   openComments: number;
+  /** `openspec validate` result; null when the CLI gave no answer */
+  validation: ChangeValidation | null;
 }
+
+export interface ValidationIssue { level: 'ERROR' | 'WARNING' | 'INFO'; path: string; message: string }
+export interface ChangeValidation { valid: boolean; issues: ValidationIssue[] }
 
 /** A capability's main spec: openspec/specs/<name>/spec.md */
 export interface SpecSummary { name: string; file: string; requirements: number }

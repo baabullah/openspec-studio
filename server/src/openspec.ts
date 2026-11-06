@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { runCmd } from './proc.ts';
-import type { ArtifactStatus, ChangeStage, ChangeSummary, ReviewComment, SpecSummary } from '../../shared/protocol.ts';
+import type { ArtifactStatus, ChangeStage, ChangeSummary, ChangeValidation, ReviewComment, SpecSummary } from '../../shared/protocol.ts';
 
 const OPENSPEC = process.env.OPENSPEC_BIN || 'openspec';
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
@@ -108,25 +108,30 @@ export function openspecSignature(repoAbs: string): string {
 // The CLI's view of a repo only changes when files under openspec/ do. Review
 // comments are not files, so resolving one (which refreshes the change list)
 // must not wait for two CLI runs again.
-const cliCache = new Map<string, { sig: string; list: ListJson; status: { changes?: StatusJson[] } }>();
+interface ValidateJson { items?: { id: string; type: string; valid: boolean; issues?: ChangeValidation['issues'] }[] }
+const cliCache = new Map<string, { sig: string; list: ListJson; status: { changes?: StatusJson[] }; validate: ValidateJson | null }>();
 
 async function cliView(repoAbs: string) {
   const sig = openspecSignature(repoAbs);
   const hit = cliCache.get(repoAbs);
   if (hit?.sig === sig) return hit;
-  const [list, status] = await Promise.all([
+  const [list, status, validate] = await Promise.all([
     runJson<ListJson>(['list'], repoAbs),
     runJson<{ changes?: StatusJson[] }>(['status', '--all'], repoAbs),
+    // exits non-zero when something is invalid; runJson still parses the report
+    runJson<ValidateJson>(['validate', '--changes', '--no-interactive'], repoAbs),
   ]);
   // only keep complete answers; a failed run is retried next time. The files may
   // have changed while the CLI ran, so key it by the signature taken before.
-  if (list && status) cliCache.set(repoAbs, { sig, list, status });
-  return { list, status };
+  // (validation is a bonus: without it the change list still works)
+  if (list && status) cliCache.set(repoAbs, { sig, list, status, validate });
+  return { list, status, validate };
 }
 
 export async function listChanges(repoAbs: string, commentsFor: (change: string) => ReviewComment[]): Promise<ChangeSummary[]> {
   if (!fs.existsSync(path.join(repoAbs, 'openspec', 'changes'))) return [];
-  const { list, status } = await cliView(repoAbs);
+  const { list, status, validate } = await cliView(repoAbs);
+  const validation = new Map((validate?.items ?? []).filter((v) => v.type === 'change').map((v) => [v.id, { valid: v.valid, issues: v.issues ?? [] }]));
   const byName = new Map((status?.changes ?? []).map((s) => [s.changeName, s]));
   return (list?.changes ?? []).map((c) => {
     const st = byName.get(c.name);
@@ -134,7 +139,7 @@ export async function listChanges(repoAbs: string, commentsFor: (change: string)
     const open = cs.filter((x) => x.status !== 'resolved').length;
     const reviewed = cs.length > 0 && open === 0;
     const base = { ...c, artifacts: st?.artifacts ?? [], isPlanningComplete: st?.isPlanningComplete ?? false, isComplete: st?.isComplete ?? false };
-    return { ...base, files: changeFiles(repoAbs, c.name), openComments: open, stage: stageOf(base, open, reviewed) };
+    return { ...base, files: changeFiles(repoAbs, c.name), openComments: open, stage: stageOf(base, open, reviewed), validation: validation.get(c.name) ?? null };
   });
 }
 
