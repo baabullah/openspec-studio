@@ -6,7 +6,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { WebSocketServer, type WebSocket } from 'ws';
 import chokidar, { type FSWatcher } from 'chokidar';
-import type { ClientMsg, LifecycleAction, ServerMsg } from '../../shared/protocol.ts';
+import type { ServerMsg } from '../../shared/protocol.ts';
 import { agents, DEFAULT_AGENT, getAgent } from './agents.ts';
 import { comments, events, migrateRepoIds, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
@@ -15,6 +15,8 @@ import { hasOpenSpec, safeResolve, STUDIO_DIR } from './repos.ts';
 import { addRoot, browse, findRepos, removeRoot, repoPath, roots, seedRoots } from './workspace.ts';
 import { allowedHostnames, hostAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, sendReview } from './review/service.ts';
+import { actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
+import type { z } from 'zod';
 
 // Older versions identified repos by their path relative to a single REPOS_ROOT
 // (default: two levels above this folder). Move that data to absolute ids, and
@@ -92,7 +94,10 @@ const repoOf = (c: Context, name?: string) => {
   if (!abs) throw Object.assign(new Error('repo not found'), { status: 404 });
   return { repo, abs };
 };
-const body = async (c: Context) => (await c.req.json().catch(() => ({}))) as Record<string, any>;
+const body = async <T extends z.ZodType>(c: Context, schema: T): Promise<z.output<T>> => {
+  const raw = await c.req.json().catch(() => { throw Object.assign(new Error('invalid request: body is not JSON'), { status: 400 }); });
+  return parseOr400(schema, raw);
+};
 const validChange = (abs: string, change: unknown): change is string =>
   typeof change === 'string' && /^[\w.-]+$/.test(change) && fs.existsSync(openspec.changeDir(abs, change));
 
@@ -112,15 +117,14 @@ app.get('/api/repos', async (c) => c.json(await listRepos(c.req.query('refresh')
 
 // folders the studio works in, chosen in the UI
 app.post('/api/roots', async (c) => {
-  const b = await body(c);
+  const b = await body(c, rootBody);
   try { addRoot(b.path); } catch (e: any) { return c.json({ error: e.message }, 400); }
   return c.json(await listRepos(true));
 });
 app.delete('/api/roots', async (c) => {
-  const b = await body(c);
-  const p = String(b.path ?? '');
+  const b = await body(c, rootBody);
   // stop agents in repos that are no longer reachable
-  removeRoot(p);
+  removeRoot(b.path);
   for (const id of hub.repos()) if (!repoPath(id)) hub.stop(id);
   return c.json(await listRepos());
 });
@@ -129,7 +133,7 @@ app.get('/api/browse', (c) => {
 });
 
 app.post('/api/init', async (c) => {
-  const b = await body(c);
+  const b = await body(c, initBody);
   const { repo, abs } = repoOf(c, b.repo);
   const agent = getAgent(b.agent);
   if (!agent?.openspecTool) return c.json({ error: 'agent has no OpenSpec integration' }, 400);
@@ -158,15 +162,14 @@ app.get('/api/file', (c) => {
 
 // lifecycle buttons: the server owns the agent-specific command syntax
 app.post('/api/action', async (c) => {
-  const b = await body(c);
+  const b = await body(c, actionBody);
   const { repo, abs } = repoOf(c, b.repo);
   const s = hub.get(repo);
   if (!s) return c.json({ error: 'no agent session' }, 409);
-  const action = b.action as LifecycleAction;
-  if (!['propose', 'explore', 'update', 'apply', 'sync', 'archive'].includes(action)) return c.json({ error: 'bad action' }, 400);
+  const { action } = b;
   const needsChange = ['update', 'apply', 'sync', 'archive'].includes(action);
   if (needsChange && !validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
-  const text = String(b.text ?? '').trim().slice(0, 4000);
+  const text = (b.text ?? '').trim();
   const args = [needsChange ? b.change : '', text].filter(Boolean).join(' ');
   if (action === 'propose' && !text) return c.json({ error: 'describe the change' }, 400);
   const label = `${action[0].toUpperCase()}${action.slice(1)}${needsChange ? ` · ${b.change}` : ''}`;
@@ -186,7 +189,7 @@ app.get('/api/review', (c) => {
 });
 
 app.post('/api/comments', async (c) => {
-  const b = await body(c);
+  const b = await body(c, commentCreate);
   const { repo, abs } = repoOf(c, b.repo);
   if (!validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
   const cm = createComment(repo, b.change, b);
@@ -197,10 +200,10 @@ app.post('/api/comments', async (c) => {
 app.patch('/api/comments/:id', async (c) => {
   const cm = comments.get(c.req.param('id'));
   if (!cm) return c.json({ error: 'not found' }, 404);
-  const b = await body(c);
+  const b = await body(c, commentPatch);
   const next = { ...cm };
-  if (typeof b.body === 'string') next.body = b.body.slice(0, 8000);
-  if (['comment', 'change', 'remove', 'question', 'ok'].includes(b.kind)) next.kind = b.kind;
+  if (b.body !== undefined) next.body = b.body;
+  if (b.kind) next.kind = b.kind;
   if (b.status === 'resolved') next.status = 'resolved';
   if (b.status === 'draft') { next.status = 'draft'; next.roundId = null; } // reopen → goes out with the next review
   comments.put(next);
@@ -218,7 +221,7 @@ app.delete('/api/comments/:id', (c) => {
 });
 
 app.post('/api/review/send', async (c) => {
-  const b = await body(c);
+  const b = await body(c, changeBody);
   const { repo, abs } = repoOf(c, b.repo);
   if (!validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
   const s = hub.get(repo);
@@ -228,7 +231,7 @@ app.post('/api/review/send', async (c) => {
 });
 
 app.post('/api/review/close', async (c) => {
-  const b = await body(c);
+  const b = await body(c, changeBody);
   const { repo, abs } = repoOf(c, b.repo);
   if (!validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
   if (hub.get(repo)?.status === 'busy') return c.json({ error: 'agent is still working' }, 409);
@@ -265,8 +268,11 @@ wss.on('connection', (ws) => {
   };
 
   ws.on('message', async (raw) => {
-    let m: ClientMsg;
-    try { m = JSON.parse(String(raw)); } catch { return; }
+    let json: unknown;
+    try { json = JSON.parse(String(raw)); } catch { return send(ws, { type: 'error', message: 'invalid message: not JSON' }); }
+    const parsed = clientMsg.safeParse(json);
+    if (!parsed.success) return send(ws, { type: 'error', message: `invalid message: ${describeIssues(parsed.error)}` });
+    const m = parsed.data;
     const abs = repoPath(m.repo);
     if (!abs) return send(ws, { type: 'error', message: 'repo not found' });
     const s = hub.get(m.repo);
@@ -288,7 +294,7 @@ wss.on('connection', (ws) => {
         case 'stop': hub.stop(m.repo); break;
         case 'prompt': {
           // free-form turns (e.g. "Continue") may finish an interrupted review round
-          const res = await s?.prompt(String(m.text).slice(0, 20000));
+          const res = await s?.prompt(m.text);
           const ch = res && onTurnEnd(m.repo, abs, res.stopReason, res.reply);
           if (ch) reviewChanged(m.repo, ch);
           break;
