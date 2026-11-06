@@ -1,4 +1,4 @@
-import type { LoggedEvent } from '../../../shared/protocol.ts';
+import type { LoggedEvent, TurnUsage } from '../../../shared/protocol.ts';
 
 export interface ToolItem {
   type: 'tool'; key: string; id: string; title: string; kind: string; status: string;
@@ -14,7 +14,11 @@ export type Item =
   | { type: 'elicitation'; key: string; id: string; message: string; schema: any; resolved: string | null }
   | { type: 'notice'; key: string; level: 'info' | 'error'; text: string }
   | { type: 'files'; key: string; paths: string[] }
-  | { type: 'turn_end'; key: string; stopReason: string };
+  | { type: 'turn_end'; key: string; stopReason: string; usage?: TurnUsage };
+
+/** Tokens summed over the turns of the current agent session. */
+export interface UsageTotals { turns: number; input: number; output: number; cacheRead: number; cacheWrite: number; thought: number }
+const noUsage = (): UsageTotals => ({ turns: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, thought: 0 });
 
 /** Tool titles are often the raw shell command: drop backticks and a leading `cd <dir> &&`. */
 export const cleanTitle = (t: string) => t.trim().replace(/^`+|`+$/g, '').replace(/^cd\s+("[^"]+"|'[^']+'|\S+)\s*(&&|;)\s*/, '');
@@ -22,7 +26,7 @@ export const cleanTitle = (t: string) => t.trim().replace(/^`+|`+$/g, '').replac
 const textOf = (c: any) => (c?.type === 'text' ? String(c.text ?? '') : '');
 
 /** Fold the raw event log into display items (streamed chunks merged, tool calls updated in place). */
-export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; busySince: string | null } {
+export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; busySince: string | null; totals: UsageTotals } {
   const items: Item[] = [];
   const tools = new Map<string, ToolItem>();
   // Interaction ids restart with each agent process (p1, p2, …), so a
@@ -41,6 +45,7 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
   let last: Item | undefined;
   let plan: Extract<Item, { type: 'plan' }> | null = null;
   let busySince: string | null = null;
+  let totals = noUsage();
 
   for (const { seq, at, event: e } of entries) {
     const key = String(seq);
@@ -51,11 +56,17 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
         plan = null; busySince = at;
         break;
       case 'turn_end':
-        items.push({ type: 'turn_end', key, stopReason: e.stopReason });
+        items.push({ type: 'turn_end', key, stopReason: e.stopReason, usage: e.usage });
         busySince = null;
+        if (e.usage) {
+          totals.turns++;
+          totals.input += e.usage.input; totals.output += e.usage.output;
+          totals.cacheRead += e.usage.cacheRead ?? 0; totals.cacheWrite += e.usage.cacheWrite ?? 0; totals.thought += e.usage.thought ?? 0;
+        }
         break;
       case 'notice':
         items.push({ type: 'notice', key, level: e.level, text: e.text });
+        if (/^New .* session started\./.test(e.text)) totals = noUsage(); // a fresh session starts counting again
         break;
       case 'file_write':
         if (last?.type === 'files') { if (!last.paths.includes(e.path)) last.paths.push(e.path); }
@@ -100,5 +111,5 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
   // permissions that arrived before their tool card was known
   for (const it of items) if (it.type === 'permission' && !it.tool) it.tool = tools.get(it.toolCall?.toolCallId);
   const pending = items.filter((i) => (i.type === 'permission' || i.type === 'elicitation') && !i.resolved);
-  return { items, pending, busySince };
+  return { items, pending, busySince, totals };
 }

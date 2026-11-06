@@ -3,6 +3,7 @@ import { Bot, ChevronDown, Plug, Power, RotateCcw, Send, Square, Sparkles } from
 import { cancelTurn, sendPrompt, setAgent, setConfig, startAgent, stopAgent, useStore } from '../store.ts';
 import { Badge, Button, cx, IconButton, Menu, MenuItem, Spinner } from '../lib/ui.tsx';
 import { fold, type Item } from '../agent/transcript.ts';
+import { ContextMeter, TurnUsageLine } from '../agent/usage.tsx';
 import { ElicitationCard, FilesView, MessageView, NoticeView, PermissionCard, PlanView, ThoughtView, ToolCard, TurnEnd } from '../agent/cards.tsx';
 
 function Row({ it, last }: { it: Item; last?: boolean }) {
@@ -25,7 +26,7 @@ function Row({ it, last }: { it: Item; last?: boolean }) {
       return it.type === 'permission' ? <PermissionCard it={it} /> : <ElicitationCard it={it} />;
     case 'notice': return <NoticeView level={it.level} text={it.text} />;
     case 'files': return <FilesView paths={it.paths} />;
-    case 'turn_end': return <TurnEnd stopReason={it.stopReason} last={last} />;
+    case 'turn_end': return <>{<TurnEnd stopReason={it.stopReason} last={last} />}{it.usage && <TurnUsageLine u={it.usage} />}</>;
   }
 }
 
@@ -43,7 +44,7 @@ function Elapsed({ since }: { since: string }) {
 
 export function AgentPanel() {
   const { session, events, agents, agent, repo, repos } = useStore();
-  const { items, pending, busySince } = useMemo(() => fold(events), [events]);
+  const { items, pending, busySince, totals } = useMemo(() => fold(events), [events]);
   const scroller = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const [text, setText] = useState('');
@@ -90,6 +91,7 @@ export function AgentPanel() {
         {status && <Badge tone={status.tone}>{session?.status === 'busy' || session?.status === 'starting' ? <Spinner className="h-2.5 w-2.5" /> : null}{status.label}</Badge>}
         {busySince && session?.status === 'busy' && <span className="text-[11px] text-muted"><Elapsed since={busySince} /></span>}
         <div className="flex-1" />
+        {session && <ContextMeter context={session.context ?? null} totals={totals} />}
         {session?.status === 'busy' && <Button size="sm" variant="danger" onClick={cancelTurn}><Square size={12} /> Stop</Button>}
         {live && (
           <Menu align="right" trigger={(t) => <IconButton title="Session" onClick={t}><Power size={15} /></IconButton>}>

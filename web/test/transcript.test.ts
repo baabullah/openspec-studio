@@ -53,3 +53,24 @@ describe('fold', () => {
     expect(items).toEqual([expect.objectContaining({ type: 'files', paths: ['a.md', 'b.md'] })]);
   });
 });
+
+describe('token usage', () => {
+  const usage = { input: 1200, output: 310, cacheRead: 9800, cacheWrite: 450, thought: null, total: 11760 };
+  it('keeps each turn usage and sums the current session', () => {
+    const { items, totals } = fold(log(
+      { kind: 'notice', level: 'info', text: 'New Claude Code session started.' },
+      { kind: 'user', text: 'a' }, { kind: 'turn_end', stopReason: 'end_turn', usage },
+      { kind: 'user', text: 'b' }, { kind: 'turn_end', stopReason: 'end_turn', usage },
+      { kind: 'user', text: 'c' }, { kind: 'turn_end', stopReason: 'end_turn' }, // an agent that reports nothing
+    ));
+    expect(items.filter((i) => i.type === 'turn_end').map((i) => (i as { usage?: unknown }).usage)).toEqual([usage, usage, undefined]);
+    expect(totals).toEqual({ turns: 2, input: 2400, output: 620, cacheRead: 19600, cacheWrite: 900, thought: 0 });
+  });
+  it('starts again with a new session', () => {
+    const { totals } = fold(log(
+      { kind: 'turn_end', stopReason: 'end_turn', usage },
+      { kind: 'notice', level: 'info', text: 'New Codex session started.' },
+    ));
+    expect(totals.turns).toBe(0);
+  });
+});
