@@ -7,7 +7,7 @@ import * as acp from '@agentclientprotocol/sdk';
 import type { AgentEvent, ConfigOption, LoggedEvent, SessionState, SessionStatus } from '../../../shared/protocol.ts';
 import type { AgentDef } from '../agents.ts';
 import { events, sessions } from '../db.ts';
-import { safeResolve } from '../repos.ts';
+import { safeResolve, STUDIO_VERSION } from '../repos.ts';
 
 export interface TurnResult { stopReason: string; reply: string }
 type Listener = { onEvent(repo: string, e: LoggedEvent): void; onState(repo: string, s: SessionState | null): void };
@@ -147,7 +147,7 @@ export class AgentSession {
       const init: any = await this.conn.agent.request('initialize', {
         protocolVersion: acp.PROTOCOL_VERSION,
         clientCapabilities: { fs: { readTextFile: true, writeTextFile: true }, terminal: false, elicitation: { form: {} } },
-        clientInfo: { name: 'openspec-studio', version: '0.1.0' },
+        clientInfo: { name: 'openspec-studio', version: STUDIO_VERSION },
       } as any);
       const stored = sessions.get(this.repo, this.agent.id);
       let res: any = null;

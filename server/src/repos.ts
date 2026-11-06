@@ -5,6 +5,10 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const STUDIO_DIR = path.resolve(here, '..', '..');
+/** The studio's version, from the root package.json (sent to agents as clientInfo). */
+export const STUDIO_VERSION: string = (() => {
+  try { return JSON.parse(fs.readFileSync(path.join(STUDIO_DIR, 'package.json'), 'utf8')).version ?? '0.0.0'; } catch { return '0.0.0'; }
+})();
 export const DATA_DIR = path.resolve(process.env.STUDIO_DATA || path.join(os.homedir(), '.openspec-studio'));
 fs.mkdirSync(DATA_DIR, { recursive: true });
 

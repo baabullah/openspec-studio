@@ -37,7 +37,8 @@ interface State {
 }
 
 export const useStore = create<State>(() => ({
-  agents: [], defaultAgent: 'codebuddy', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: 'codebuddy',
+  // defaultAgent / agent come from /api/config (the server owns DEFAULT_AGENT)
+  agents: [], defaultAgent: '', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: '',
   session: null, events: [], changes: [], archived: [], changesLoaded: false, change: null, file: null, content: '',
   comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false,
 }));
@@ -127,7 +128,7 @@ export async function boot() {
   booted = true;
   connectWs();
   const cfg = await guard(api.config());
-  if (cfg) set({ agents: cfg.agents, defaultAgent: cfg.defaultAgent, platform: cfg.platform });
+  if (cfg) set({ agents: cfg.agents, defaultAgent: cfg.defaultAgent, agent: get().agent || cfg.defaultAgent, platform: cfg.platform });
   await loadRepos();
   const last = ls.get('repo');
   // older versions stored the path relative to the single repos root

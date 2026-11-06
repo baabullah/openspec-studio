@@ -11,7 +11,7 @@ import { agents, DEFAULT_AGENT, getAgent } from './agents.ts';
 import { comments, db, events, migrateRepoIds, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
-import { hasOpenSpec, safeResolve, STUDIO_DIR } from './repos.ts';
+import { hasOpenSpec, safeResolve, STUDIO_DIR, STUDIO_VERSION } from './repos.ts';
 import { addRoot, browse, findRepos, removeRoot, repoPath, roots, seedRoots } from './workspace.ts';
 import { allowedHostnames, hostAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
@@ -102,7 +102,7 @@ const validChange = (abs: string, change: unknown): change is string =>
   typeof change === 'string' && /^[\w.-]+$/.test(change) && fs.existsSync(openspec.changeDir(abs, change));
 
 app.get('/api/config', (c) => c.json({
-  defaultAgent: DEFAULT_AGENT, platform: process.platform,
+  defaultAgent: DEFAULT_AGENT, platform: process.platform, version: STUDIO_VERSION,
   agents: agents().map(({ id, label, openspecTool }) => ({ id, label, openspecTool })),
 }));
 
