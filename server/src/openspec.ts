@@ -83,12 +83,50 @@ function stageOf(c: { isPlanningComplete: boolean; completedTasks: number; total
 interface ListJson { changes?: { name: string; completedTasks: number; totalTasks: number; lastModified: string; status: string }[] }
 interface StatusJson { changeName: string; artifacts: ArtifactStatus[]; isPlanningComplete: boolean; isComplete: boolean }
 
-export async function listChanges(repoAbs: string, commentsFor: (change: string) => ReviewComment[]): Promise<ChangeSummary[]> {
-  if (!fs.existsSync(path.join(repoAbs, 'openspec', 'changes'))) return [];
+/**
+ * Fingerprint of everything under <repo>/openspec (path, size, mtime of every
+ * entry). Cheap next to running the CLI, which takes seconds on some setups.
+ */
+export function openspecSignature(repoAbs: string): string {
+  const parts: string[] = [];
+  const walk = (dir: string) => {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      const full = path.join(dir, e.name);
+      try {
+        const st = fs.statSync(full);
+        parts.push(`${full}|${st.size}|${st.mtimeMs}`);
+        if (st.isDirectory()) walk(full);
+      } catch { /* vanished meanwhile */ }
+    }
+  };
+  walk(path.join(repoAbs, 'openspec'));
+  return parts.join('\n');
+}
+
+// The CLI's view of a repo only changes when files under openspec/ do. Review
+// comments are not files, so resolving one (which refreshes the change list)
+// must not wait for two CLI runs again.
+const cliCache = new Map<string, { sig: string; list: ListJson; status: { changes?: StatusJson[] } }>();
+
+async function cliView(repoAbs: string) {
+  const sig = openspecSignature(repoAbs);
+  const hit = cliCache.get(repoAbs);
+  if (hit?.sig === sig) return hit;
   const [list, status] = await Promise.all([
     runJson<ListJson>(['list'], repoAbs),
     runJson<{ changes?: StatusJson[] }>(['status', '--all'], repoAbs),
   ]);
+  // only keep complete answers; a failed run is retried next time. The files may
+  // have changed while the CLI ran, so key it by the signature taken before.
+  if (list && status) cliCache.set(repoAbs, { sig, list, status });
+  return { list, status };
+}
+
+export async function listChanges(repoAbs: string, commentsFor: (change: string) => ReviewComment[]): Promise<ChangeSummary[]> {
+  if (!fs.existsSync(path.join(repoAbs, 'openspec', 'changes'))) return [];
+  const { list, status } = await cliView(repoAbs);
   const byName = new Map((status?.changes ?? []).map((s) => [s.changeName, s]));
   return (list?.changes ?? []).map((c) => {
     const st = byName.get(c.name);
