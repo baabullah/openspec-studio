@@ -17,6 +17,7 @@ import { FileDiffCard } from '../review/DiffView.tsx';
 import { ReadOnlyDoc } from './ReadOnlyDoc.tsx';
 import { ArchivedView } from './ArchivedView.tsx';
 import { ValidationPanel } from '../review/ValidationPanel.tsx';
+import { artifactOfFile, StalePanel } from '../review/StalePanel.tsx';
 
 const CHANGES_TAB = '__changes__';
 
@@ -389,12 +390,14 @@ export function DocReview() {
               className={cx('flex shrink-0 items-center gap-1.5 border-b-2 px-3 pb-2 pt-1 text-[13px] transition', f === file ? 'border-accent font-medium text-fg' : 'border-transparent text-muted hover:text-fg')}>
               {f === CHANGES_TAB && <GitCompareArrows size={13} />}
               {tabLabel(f)}
+              {f !== CHANGES_TAB && c.stale.some((s) => s.id === artifactOfFile(f)) && <span className="h-1.5 w-1.5 rounded-full bg-warn" title="May be out of date: written before something it depends on changed" />}
               {f !== CHANGES_TAB && count(f) > 0 && <span className="rounded-full bg-warn-soft px-1.5 text-[10.5px] text-warn">{count(f)}</span>}
             </button>
           ))}
         </div>
       </header>
       <ValidationPanel c={c} />
+      <StalePanel key={`${repo}:${c.name}`} c={c} />
 
       {lastDone && lastDone.id !== seenRound && lastDone.diffs.length > 0 && file !== CHANGES_TAB && (
         <div className="flex items-center gap-3 border-b border-info/30 bg-info-soft px-6 py-2 text-[13px]">
