@@ -12,7 +12,7 @@
     "dev": "node scripts/dev.mjs",
     "build": "npm -w web run build",
     "start": "npm -w server run start",
-    "test": "npm -w server run test",
+    "test": "npm -w server run test && npm -w web run test",
     "typecheck": "npm -w server run typecheck && npm -w web run typecheck"
   },
   "engines": {

@@ -1,0 +1,55 @@
+import { describe, expect, it } from 'vitest';
+import type { AgentEvent, LoggedEvent } from '../../shared/protocol.ts';
+import { cleanTitle, fold } from '../src/agent/transcript.ts';
+
+let seq = 0;
+const log = (...events: AgentEvent[]): LoggedEvent[] => events.map((event) => ({ seq: ++seq, at: `2026-01-01T00:00:${String(seq).padStart(2, '0')}Z`, event }));
+const chunk = (sessionUpdate: string, text: string): AgentEvent => ({ kind: 'update', update: { sessionUpdate, content: { type: 'text', text } } } as AgentEvent);
+const tool = (u: Record<string, unknown>): AgentEvent => ({ kind: 'update', update: { sessionUpdate: 'tool_call_update', ...u } } as AgentEvent);
+
+describe('cleanTitle', () => {
+  it('drops backticks and a leading cd', () => {
+    expect(cleanTitle('`cd "/my repo" && npm test`')).toBe('npm test');
+    expect(cleanTitle("cd 'a b'; ls")).toBe('ls');
+    expect(cleanTitle('Read file')).toBe('Read file');
+  });
+});
+
+describe('fold', () => {
+  it('merges streamed chunks and tracks the busy turn', () => {
+    const { items, busySince } = fold(log(
+      { kind: 'user', text: 'hi' },
+      chunk('agent_thought_chunk', 'hmm'), chunk('agent_thought_chunk', '…'),
+      chunk('agent_message_chunk', 'Hel'), chunk('agent_message_chunk', 'lo'),
+    ));
+    expect(items.map((i) => i.type)).toEqual(['user', 'thought', 'message']);
+    expect(items[2]).toMatchObject({ text: 'Hello' });
+    expect(busySince).not.toBeNull();
+    expect(fold(log({ kind: 'user', text: 'x' }, { kind: 'turn_end', stopReason: 'end_turn' })).busySince).toBeNull();
+  });
+
+  it('updates a tool card in place', () => {
+    const { items } = fold(log(
+      tool({ sessionUpdate: 'tool_call', toolCallId: 't1', title: '`cd x && ls`', kind: 'execute', status: 'pending' }),
+      tool({ toolCallId: 't1', status: 'completed', locations: [{ path: 'a.md' }] }),
+    ));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ type: 'tool', title: 'ls', kind: 'execute', status: 'completed', locations: [{ path: 'a.md' }] });
+  });
+
+  it('pairs a resolution with the latest request of that id', () => {
+    // interaction ids restart with each agent process
+    const perm = (id: string): AgentEvent => ({ kind: 'permission', id, toolCall: { toolCallId: 't' }, options: [] } as unknown as AgentEvent);
+    const { items, pending } = fold(log(
+      perm('p1'), { kind: 'interaction_resolved', id: 'p1', summary: 'Allow' },
+      perm('p1'), // new process, same id, not answered yet
+    ));
+    expect(items.filter((i) => i.type === 'permission').map((i) => (i as { resolved: string | null }).resolved)).toEqual(['Allow', null]);
+    expect(pending).toHaveLength(1);
+  });
+
+  it('collects consecutive file writes into one item', () => {
+    const { items } = fold(log({ kind: 'file_write', path: 'a.md' }, { kind: 'file_write', path: 'b.md' }, { kind: 'file_write', path: 'a.md' }));
+    expect(items).toEqual([expect.objectContaining({ type: 'files', paths: ['a.md', 'b.md'] })]);
+  });
+});
