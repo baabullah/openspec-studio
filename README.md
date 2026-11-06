@@ -127,8 +127,8 @@ Studio is one page with three columns:
 
 | area | what is there |
 |---|---|
-| **Left: repo rail** | Repository picker (with **Add folder…**), **New change** button, the changes grouped by stage, the archived list, and at the bottom the theme toggle and, when the server is down, the "server offline" badge. |
-| **Middle: review pane** | The open change: title, task and open-comment badges, one tab per artifact (`proposal`, `design`, `spec: <capability>`, `tasks`, plus **What changed** after a review round), the rendered document with highlights, margin comments, and the review bar at the bottom. |
+| **Left: repo rail** | Repository picker (with **Add folder…**), **New change** button, the changes grouped by stage, then the collapsible **Specs** (main specs) and **Archived** lists, and at the bottom the theme toggle and, when the server is down, the "server offline" badge. |
+| **Middle: review pane** | The open change: title, task and open-comment badges, one tab per artifact (`proposal`, `design`, `spec: <capability>`, `tasks`, plus **What changed** after a review round), the rendered document with highlights, margin comments, and the review bar at the bottom. A main spec or an archived change opens here too, read-only. |
 | **Right: agent panel** | Agent picker and status, session options (mode, model, …), the live transcript, pinned decisions waiting for you, and a chat box. |
 
 When the document column gets narrow (window under about 1440 px wide), margin comments move into a **Notes** block
@@ -212,6 +212,19 @@ When all tasks are done the change moves to **Done**. **Archive** opens a confir
 is complete, merges its delta specs into the main specs and moves the folder to `openspec/changes/archive/`. Use **Sync
 specs** from the ⋯ menu to merge the specs without archiving. Archived changes are listed under **Archived** at the
 bottom of the rail.
+
+### 10. Look back: archived changes and main specs
+Both are read-only views in the middle pane (a **read-only** tag in the header; no comment toolbar, no review bar):
+- **Archived** (collapsible, newest first): click a change to open it as it was archived, one tab per artifact, plus a
+  **History** tab with every review round Studio ran for it: the comments with their verdict and the agent's note, and
+  the word-level diff of what each round changed. Studio finds the history by the change's name (archiving only adds a
+  date prefix to the folder). If a new active change took the same name, the history is shown with that change instead.
+  Changes reviewed without Studio have no history.
+- **Specs** (collapsible): the main specs in `openspec/specs/`, one per capability with its number of requirements.
+  Click one to read its `spec.md`: what the system does today, after every archived change was merged in. It updates
+  live when a sync or archive changes it.
+
+To change a spec, start a new change; specs are not edited directly.
 
 ---
 
@@ -473,6 +486,8 @@ Each scene lists what to click and what appears. Agent turns take from a few sec
 | 15 | Close the loop | **N to check · resolve addressed**, then **Resolve** on the answered question and the note | cards fade; the change moves to **Ready to build** |
 | 16 | Build | **Build it** | the agent writes `src/routes/hello.js`, registers the route in `src/app.js`, adds `test/hello.test.js`, runs `npm test` and ticks `tasks.md`; the progress bar fills; header `3/3 tasks`; the card moves to **Done** |
 | 17 | Archive | card → **Archive** → **Archive** in the dialog | the agent turns the delta spec into the new main spec `openspec/specs/greeting/spec.md` and moves the change; it appears under **Archived** |
+| 17a | Look back at it | **Archived** → `<date>-add-hello-endpoint` → **History** | the artifacts as archived (read-only), and Round 1 with each comment's verdict, the agent's notes and the diff |
+| 17b | The main specs | **Specs** → `greeting` | the new `greeting` spec with its requirement, read-only, next to the existing `health` spec |
 | 18 | Start the next one | **New change** → Propose → "Add a goodbye endpoint" → **Propose** | the agent drafts a new change; its card appears under **Drafting**, then **In review** |
 
 Optional extras: reload the page to show that comments and the transcript survive; toggle dark mode; stop and restart
