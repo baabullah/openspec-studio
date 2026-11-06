@@ -74,3 +74,15 @@ describe('review round continuation', () => {
     expect(comments.get(cm.id)).toMatchObject({ status: 'sent', body: 'use /helloworld' });
   });
 });
+
+describe('snapshot', () => {
+  it('stands in a marker for oversized files', async () => {
+    const { snapshot } = await import('../src/review/service.ts');
+    const { MAX_DOC_BYTES } = await import('../src/openspec.ts');
+    const { abs, dir } = setup('r-big');
+    fs.writeFileSync(path.join(dir, 'design.md'), 'x'.repeat(MAX_DOC_BYTES + 1));
+    const snap = snapshot(abs, 'c1');
+    expect(snap['proposal.md']).toContain('# Proposal');
+    expect(snap['design.md']).toMatch(/^\[design\.md is larger than \d+ bytes; \d+ bytes, modified /);
+  });
+});

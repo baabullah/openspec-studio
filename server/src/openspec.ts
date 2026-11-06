@@ -48,6 +48,14 @@ const walkMd = (dir: string, base = dir): string[] =>
 const ORDER = ['proposal.md', 'design.md', 'tasks.md'];
 const fileOrder = (f: string) => { const i = ORDER.indexOf(f); return i < 0 ? (f.startsWith('specs/') ? 1.5 : 9) : i; };
 
+/** Spec documents are small; refuse to load anything bigger into memory / the db / the browser. */
+export const MAX_DOC_BYTES = Number(process.env.MAX_DOC_BYTES || 2 * 1024 * 1024);
+
+/** Read a document, or null when it is larger than MAX_DOC_BYTES. */
+export function readDoc(file: string): string | null {
+  return fs.statSync(file).size > MAX_DOC_BYTES ? null : fs.readFileSync(file, 'utf8');
+}
+
 export const changeDir = (repoAbs: string, change: string) => path.join(repoAbs, 'openspec', 'changes', change);
 
 export function changeFiles(repoAbs: string, change: string): string[] {

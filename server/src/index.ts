@@ -157,7 +157,9 @@ app.get('/api/file', (c) => {
   const base = path.join(abs, 'openspec');
   const file = fs.existsSync(base) ? safeResolve(base, c.req.query('path') ?? '') : null;
   if (!file || !fs.existsSync(file) || !fs.statSync(file).isFile()) return c.json({ error: 'file not found' }, 404);
-  return c.json({ content: fs.readFileSync(file, 'utf8') });
+  const content = openspec.readDoc(file);
+  if (content === null) return c.json({ error: `file is larger than ${openspec.MAX_DOC_BYTES} bytes` }, 413);
+  return c.json({ content });
 });
 
 // lifecycle buttons: the server owns the agent-specific command syntax

@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import type { Anchor, CommentKind, ReviewComment, ReviewRound } from '../../../shared/protocol.ts';
 import { quoteExists } from '../../../shared/anchor.ts';
 import { comments, rounds, type Snapshot } from '../db.ts';
-import { changeDir, changeFiles } from '../openspec.ts';
+import { changeDir, changeFiles, MAX_DOC_BYTES, readDoc } from '../openspec.ts';
 import type { AgentSession } from '../acp/hub.ts';
 import { composeReview } from './compose.ts';
 import { parseReviewResult } from './parseResult.ts';
@@ -14,7 +14,11 @@ const shortId = () => randomUUID().slice(0, 8);
 
 export function snapshot(repoAbs: string, change: string): Snapshot {
   const dir = changeDir(repoAbs, change);
-  return Object.fromEntries(changeFiles(repoAbs, change).map((f) => [f, fs.readFileSync(path.join(dir, f), 'utf8')]));
+  // an oversized file is stood in for by a marker, so a change to it still shows up in the diff
+  return Object.fromEntries(changeFiles(repoAbs, change).map((f) => {
+    const file = path.join(dir, f);
+    return [f, readDoc(file) ?? `[${f} is larger than ${MAX_DOC_BYTES} bytes; ${fs.statSync(file).size} bytes, modified ${fs.statSync(file).mtime.toISOString()}]`];
+  }));
 }
 
 export function createComment(repo: string, change: string, input: { file?: unknown; anchor?: unknown; kind?: unknown; body?: unknown }): ReviewComment {
