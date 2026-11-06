@@ -438,8 +438,10 @@ This section is for recording a video, taking screenshots or giving a live demo.
    ```bash
    npm run demo-repo -- ~/studio-demo --tools claude    # or codebuddy / codex: the agent you will show
    ```
-   This creates `~/studio-demo/hello-app`, a git repo with a main spec (`greeting`) and one change,
-   **add-hello-endpoint**, whose proposal, design, delta spec and tasks are all written, so it opens in **In review**.
+   This creates `~/studio-demo/hello-app`: a tiny HTTP API with **no dependencies** (`node:http`, tests with
+   `node:test`, so `npm test` works without `npm install`), a main spec (`health`) and one change,
+   **add-hello-endpoint**, whose proposal, design, delta spec (`greeting`) and three tasks are all written, so it opens
+   in **In review**. The tasks are small and real (a handler, a route, a test), so **Build it** can finish them.
    `--tools` installs that agent's OpenSpec commands so review and build work. Run the command again to reset the repo.
    To film the *Initialize OpenSpec* screen as well, create an empty git repo (`git init`) next to it in the same folder.
 3. **Log in to the agent beforehand** and connect it once off-camera: the first connect of Claude Code or Codex
@@ -469,8 +471,8 @@ Each scene lists what to click and what appears. Agent turns take from a few sec
 | 13 | Read the verdicts | wait for the *done* divider | cards show *Addressed* / *Answered* with the agent's notes; banner *"The agent revised N files"* |
 | 14 | What changed | **View changes** | *Round 1* with the comment chips and a word-level diff per file |
 | 15 | Close the loop | **N to check · resolve addressed**, then **Resolve** on the answered question and the note | cards fade; the change moves to **Ready to build** |
-| 16 | Build | **Build it** | the agent implements the tasks (writes `src/routes/hello.ts`, ticks `tasks.md`); the progress bar fills; header `3/3 tasks`; the card moves to **Done** |
-| 17 | Archive | card → **Archive** → **Archive** in the dialog | the agent merges the delta spec into `openspec/specs/greeting/spec.md` and moves the change; it appears under **Archived** |
+| 16 | Build | **Build it** | the agent writes `src/routes/hello.js`, registers the route in `src/app.js`, adds `test/hello.test.js`, runs `npm test` and ticks `tasks.md`; the progress bar fills; header `3/3 tasks`; the card moves to **Done** |
+| 17 | Archive | card → **Archive** → **Archive** in the dialog | the agent turns the delta spec into the new main spec `openspec/specs/greeting/spec.md` and moves the change; it appears under **Archived** |
 | 18 | Start the next one | **New change** → Propose → "Add a goodbye endpoint" → **Propose** | the agent drafts a new change; its card appears under **Drafting**, then **In review** |
 
 Optional extras: reload the page to show that comments and the transcript survive; toggle dark mode; stop and restart
