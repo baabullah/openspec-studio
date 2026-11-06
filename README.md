@@ -193,6 +193,9 @@ progress bar from the `tasks.md` checkboxes, and one primary button:
 | **Building** | some tasks are checked | **Continue** | runs apply again to continue |
 | **Done** | every task is checked | **Archive** | asks for confirmation, then runs archive |
 
+A shield mark with a number on a card means `openspec validate` found problems in the change (see
+[Checks on the open change](#checks-on-the-open-change)).
+
 The **⋯** menu on each card offers every step at any time: **Open for review**, **Explore with agent**, **Check
 coherence** (the update workflow: the agent makes the artifacts consistent with each other), **Build (apply)**, **Sync
 specs** and **Archive…**. Actions are disabled while the agent is working.
@@ -229,6 +232,16 @@ To change a spec, start a new change; specs are not edited directly.
 ---
 
 ## Reviewing in depth
+
+### Checks on the open change
+Two bars can appear under the change's header, and both clear by themselves once the files are fixed:
+- **OpenSpec validation: 1 error, 1 warning**: the result of `openspec validate` for this change (for example a
+  requirement without a scenario, or without SHALL/MUST). Click it to list each finding with its file. **Ask agent to
+  fix** sends the findings to the agent through the update workflow.
+- **The proposal changed after the specs, the design and the tasks were written; they may be out of date.**: an
+  artifact was edited after the ones that depend on it (OpenSpec's own dependency order: proposal → specs and design →
+  tasks). The affected tabs get an amber dot. **Check coherence** asks the agent to bring exactly those artifacts in line
+  and change nothing else; **Dismiss** hides the warning until something changes again.
 
 ### Leaving comments
 There are four ways to comment:
@@ -313,6 +326,9 @@ document"* and moves to the Notes block.
 ### Header
 - **Agent name ▾**: choose the agent for this repo (only while disconnected). The choice is remembered per repo.
 - **Status badge**: Starting · Ready · Working (with an elapsed timer) · Stopped · Error.
+- **Context gauge and cost**: how full the agent's context window is (amber from 60%, red from 85%) and the session
+  cost when the agent reports one, e.g. `8% $0.096`. Hover for the context in tokens and the token totals of the
+  current session.
 - **Stop**: cancels the current turn (only while working).
 - **⏻ menu**: **New session** (start fresh instead of resuming) and **Disconnect agent**.
 - **Session options**: whatever the agent offers, as dropdowns, e.g. *Mode* (how much the agent may do without
@@ -329,7 +345,8 @@ In order of appearance:
 - **Wrote** lines listing files the agent wrote through Studio.
 - **Notices** from Studio (session started/resumed, `openspec init` output, errors).
 - **A divider at the end of every turn**: *done*, *cancelled*, or a red box explaining an early stop (refusal, token
-  limit, step limit, error) with a **Continue** button.
+  limit, step limit, error) with a **Continue** button. Under it, the tokens the agent reported for that turn:
+  `in 1.2k · cache 9.8k read · 450 write · out 310`.
 
 The panel follows the stream unless you scroll up. The history is kept on the server (the last 2000 events per repo are
 shown), so a reload or a second browser tab shows the same transcript.
@@ -343,7 +360,18 @@ box under **Needs your decision**, so it cannot scroll away:
   fields, with **Submit** and **Decline**.
 
 While a decision is pending the browser tab title reads **"(1) Needs you · OpenSpec Studio"**, and if the tab is in the
-background Studio shows a desktop notification (the browser asks for permission the first time).
+background Studio shows a desktop notification. The same happens when a turn finishes while you are elsewhere: a
+notification such as "Done · hello-app — Apply · add-hello-endpoint" and **"✓ Agent finished"** in the tab title until you
+come back. The browser asks for notification permission when you first click Connect.
+
+### Token usage by agent
+Studio shows what the agent reports over ACP and nothing it has to guess:
+
+| agent | context gauge | session cost | tokens per turn (input, cache read/write, output) |
+|---|---|---|---|
+| Claude Code | yes | yes (USD) | yes |
+| Codex | yes | no | yes |
+| CodeBuddy | yes | no (it reports credits in its own format) | not confirmed |
 
 ### Chat
 The box at the bottom sends free-form messages to the agent (Enter sends, Shift+Enter adds a line). Use it to ask about
