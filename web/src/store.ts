@@ -68,7 +68,8 @@ function connectWs() {
     const r = get().repo;
     if (r) wsSend({ type: 'subscribe', repo: r }); // also replays the agent transcript
     // while we were offline, file changes and review updates were broadcast to no one
-    if (connectedOnce) { loadRepos(); loadChanges(); loadReview(); reloadFile(); }
+    // (repos first: the selected repo may be gone, and applyWorkspace then deselects it)
+    if (connectedOnce) loadRepos().then(() => { if (get().repo) { loadChanges(); loadReview(); reloadFile(); } });
     connectedOnce = true;
   };
   ws.onclose = () => { set({ wsUp: false }); setTimeout(connectWs, Math.min(5000, 500 * 2 ** retry++)); };
