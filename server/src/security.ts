@@ -31,3 +31,19 @@ export function requestAllowed(host: string | null | undefined, origin: string |
   if (!origin) return true;
   try { return new URL(origin).host === host; } catch { return false; }
 }
+
+/**
+ * CSRF check for API calls. Safe methods pass. Everything else must pass
+ * requestAllowed (browsers send Origin on every non-GET/HEAD request).
+ * A POST must also be JSON: a page on another site can send a form or
+ * text/plain POST without a CORS preflight, but not an application/json one.
+ * DELETE/PATCH/PUT always need a preflight cross-origin, which we never
+ * grant, so they may have no body (and so no Content-Type), as the web's
+ * DELETE /api/comments/:id does.
+ */
+export function mutationAllowed(method: string, host: string | null | undefined, origin: string | null | undefined, contentType: string | null | undefined, allowed = allowedHostnames()): boolean {
+  const m = method.toUpperCase();
+  if (m === 'GET' || m === 'HEAD' || m === 'OPTIONS') return true;
+  if (!requestAllowed(host, origin, allowed)) return false;
+  return m !== 'POST' || !!contentType?.toLowerCase().startsWith('application/json');
+}

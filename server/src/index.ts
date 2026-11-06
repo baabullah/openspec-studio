@@ -13,7 +13,7 @@ import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
 import { hasOpenSpec, safeResolve, STUDIO_DIR, STUDIO_VERSION } from './repos.ts';
 import { addRoot, browse, findRepos, removeRoot, repoPath, roots, seedRoots } from './workspace.ts';
-import { allowedHostnames, hostAllowed, requestAllowed } from './security.ts';
+import { allowedHostnames, hostAllowed, mutationAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
 import { actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
 import type { z } from 'zod';
@@ -77,12 +77,10 @@ app.use('*', async (c, next) => {
   await next();
 });
 
-// CSRF: mutating requests must be same-origin JSON
+// CSRF: mutating requests must be same-origin (and POSTs JSON)
 app.use('/api/*', async (c, next) => {
-  if (c.req.method !== 'GET') {
-    if (!requestAllowed(c.req.header('host'), c.req.header('origin'), ALLOWED) || !c.req.header('content-type')?.startsWith('application/json')) {
-      return c.json({ error: 'forbidden' }, 403);
-    }
+  if (!mutationAllowed(c.req.method, c.req.header('host'), c.req.header('origin'), c.req.header('content-type'), ALLOWED)) {
+    return c.json({ error: 'forbidden' }, 403);
   }
   await next();
 });
