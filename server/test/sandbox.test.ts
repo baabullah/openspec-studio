@@ -7,7 +7,8 @@ import { safeResolve } from '../src/repos.ts';
 describe('safeResolve', () => {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-sbx-'));
   fs.mkdirSync(path.join(base, 'openspec'));
-  fs.symlinkSync(os.tmpdir(), path.join(base, 'escape'));
+  // a junction on Windows: plain symlinks need admin rights or Developer Mode there (ignored elsewhere)
+  fs.symlinkSync(os.tmpdir(), path.join(base, 'escape'), 'junction');
 
   it('allows paths inside, including files that do not exist yet', () => {
     expect(safeResolve(base, 'openspec/new/file.md')).toBe(path.join(fs.realpathSync(base), 'openspec/new/file.md'));
