@@ -36,9 +36,18 @@ const BUILTIN: AgentDef[] = [
  * [{ "id": "gemini", "label": "Gemini", "cmd": "gemini", "args": ["--experimental-acp"],
  *    "openspecTool": "gemini", "style": "slash" | "skill" | "/custom:{action} {args}" }]
  */
+const CUSTOM_FILE = path.join(DATA_DIR, 'agents.json');
+let customCache: { mtimeMs: number; agents: AgentDef[] } | null = null;
+
+/** Read agents.json again only when it changed (agents() runs on every request and socket message). */
 function loadCustom(): AgentDef[] {
-  const file = path.join(DATA_DIR, 'agents.json');
-  if (!fs.existsSync(file)) return [];
+  let mtimeMs: number;
+  try { mtimeMs = fs.statSync(CUSTOM_FILE).mtimeMs; } catch { customCache = null; return []; }
+  if (customCache?.mtimeMs !== mtimeMs) customCache = { mtimeMs, agents: parseCustom(CUSTOM_FILE) };
+  return customCache.agents;
+}
+
+function parseCustom(file: string): AgentDef[] {
   try {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
     return (Array.isArray(raw) ? raw : []).filter((a) => a?.id && a?.cmd).map((a): AgentDef => {
