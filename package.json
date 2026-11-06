@@ -14,7 +14,8 @@
     "start": "npm -w server run start",
     "test": "npm -w server run test && npm -w web run test",
     "typecheck": "npm -w server run typecheck && npm -w web run typecheck",
-    "lint": "biome lint ."
+    "lint": "biome lint .",
+    "demo-repo": "node scripts/demo-repo.mjs"
   },
   "engines": {
     "node": ">=22.13"
