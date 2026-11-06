@@ -8,7 +8,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import chokidar, { type FSWatcher } from 'chokidar';
 import type { ServerMsg } from '../../shared/protocol.ts';
 import { agents, DEFAULT_AGENT, getAgent } from './agents.ts';
-import { comments, events, migrateRepoIds, rounds } from './db.ts';
+import { comments, db, events, migrateRepoIds, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
 import { hasOpenSpec, safeResolve, STUDIO_DIR } from './repos.ts';
@@ -312,6 +312,19 @@ wss.on('connection', (ws) => {
 
 closeStaleRounds(repoPath, rounds.repos());
 
-const shutdown = () => { hub.stopAll(); process.exit(0); };
+let stopping = false;
+const shutdown = async () => {
+  if (stopping) return;
+  stopping = true;
+  hub.stopAll();
+  for (const t of debounce.values()) clearTimeout(t);
+  wss.clients.forEach((ws) => ws.terminate());
+  wss.close();
+  server.close();
+  // chokidar polling (WSL /mnt/*) keeps timers alive until closed
+  await Promise.allSettled([...watchers.values()].map((w) => w.close()));
+  try { db.close(); } catch { /* already closed */ } // checkpoints the WAL
+  process.exit(0);
+};
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
