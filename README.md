@@ -38,6 +38,8 @@ For everyday use, run a production build on a single port:
 ```bash
 npm run build && npm start   # http://127.0.0.1:3940
 ```
+`npm start` runs the TypeScript server through `tsx` (no separate compile step), so keep the dev dependencies installed;
+the startup cost is a second or two and nothing else changes at runtime.
 
 ### Configuration
 All optional, as environment variables:
@@ -52,6 +54,7 @@ All optional, as environment variables:
 | `STUDIO_DATA` | `~/.openspec-studio` | database, config and `agents.json` |
 | `REPO_SCAN_DEPTH` | `4` | how deep to look for repos inside a folder |
 | `OPENSPEC_BIN` | `openspec` | OpenSpec CLI to run |
+| `MAX_DOC_BYTES` | `2097152` | largest spec file the server opens or snapshots (bigger ones get a 413 / a marker) |
 
 ## Agents
 | id | how it runs | login | OpenSpec invocation |
@@ -117,11 +120,18 @@ agent's ACP file reads/writes are confined to the repo. There is no authenticati
 
 ## Development
 ```bash
-npm test           # unit tests (vitest)
+npm test           # unit tests (vitest): server, then web
 npm run typecheck  # server + web
+npm run lint       # biome (lint only; the formatter is off)
 ```
-Tests cover comment anchoring, the review prompt and `review-result` parser, review rounds, the path sandbox, the
-Host/Origin checks, and workspace folders (scan, sandbox, data migration).
+Server tests cover comment anchoring, the review prompt and `review-result` parser, review rounds, request schemas,
+custom agents, the path sandbox, the Host/Origin checks, and workspace folders (scan, sandbox, data migration). Web
+tests cover the transcript fold and the document text model (under jsdom).
+
+CI runs lint, typecheck, tests and the build on Linux and Windows (Node 22 and 24) for every push to `main` and every
+pull request. Lint warnings (mostly accessibility) are a known backlog and don't fail the build; errors do.
+
+Line endings are pinned to LF by `.gitattributes`, so editing from Windows and WSL doesn't show every file as changed.
 
 ## License
 MIT, see [LICENSE](LICENSE).
