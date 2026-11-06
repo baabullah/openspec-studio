@@ -6,7 +6,7 @@ import { serve } from '@hono/node-server';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { WebSocketServer, type WebSocket } from 'ws';
 import chokidar, { type FSWatcher } from 'chokidar';
-import type { ServerMsg } from '../../shared/protocol.ts';
+import type { ArchivedChange, ServerMsg } from '../../shared/protocol.ts';
 import { agents, DEFAULT_AGENT, getAgent } from './agents.ts';
 import { comments, db, events, migrateRepoIds, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
@@ -178,6 +178,22 @@ app.post('/api/action', async (c) => {
   if (open && closeRound(repo, abs, open.change)) reviewChanged(repo, open.change);
   s.prompt(s.agent.command(action, args), label).catch(() => {});
   return c.json({ ok: true });
+});
+
+// archived change: its artifacts plus the comments and review rounds kept under its old name
+app.get('/api/archived', (c) => {
+  const { repo, abs } = repoOf(c);
+  const name = c.req.query('name') ?? '';
+  if (!/^[\w.-]+$/.test(name) || !fs.existsSync(openspec.archivedDir(abs, name))) return c.json({ error: 'archived change not found' }, 404);
+  const change = openspec.archivedChangeName(name);
+  // the history is keyed by name: if a new active change took the same name, it is that change's
+  const historyHidden = fs.existsSync(openspec.changeDir(abs, change));
+  const body: ArchivedChange = {
+    name, change, files: openspec.archivedFiles(abs, name), historyHidden,
+    comments: historyHidden ? [] : comments.list(repo, change),
+    rounds: historyHidden ? [] : rounds.list(repo, change),
+  };
+  return c.json(body);
 });
 
 // ---- review API

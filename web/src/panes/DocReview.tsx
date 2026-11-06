@@ -15,6 +15,7 @@ import { KINDS, STATUS_META, TO_CHECK } from '../review/kinds.tsx';
 import { lineHintOf, offsetAtPoint, paint, TextModel } from '../review/textModel.ts';
 import { FileDiffCard } from '../review/DiffView.tsx';
 import { ReadOnlyDoc } from './ReadOnlyDoc.tsx';
+import { ArchivedView } from './ArchivedView.tsx';
 
 const CHANGES_TAB = '__changes__';
 
@@ -363,6 +364,8 @@ export function DocReview() {
         badges={<><Badge tone="info"><BookOpen size={12} /> main spec</Badge>{sp && <Badge>{sp.requirements} requirement{sp.requirements === 1 ? '' : 's'}</Badge>}</>} />
     );
   }
+
+  if (browse?.kind === 'archived') return <ArchivedView name={browse.name} file={browse.file} data={browse.data} />;
 
   if (!c) return <Empty icon={<FileText size={28} />} title="Nothing open" text={!useStore.getState().changesLoaded ? 'Loading changes…' : changes.length ? 'Pick a change on the left to review it.' : 'Start with “New change” on the left. The agent drafts the proposal, specs, design and tasks for you to review.'} />;
 

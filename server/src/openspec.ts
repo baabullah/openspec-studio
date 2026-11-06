@@ -151,6 +151,17 @@ export function listSpecs(repoAbs: string): SpecSummary[] {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export const archivedDir = (repoAbs: string, name: string) => path.join(repoAbs, 'openspec', 'changes', 'archive', name);
+
+/** `openspec archive` prefixes the folder with the date: 2026-11-06-add-notes → add-notes. */
+export const archivedChangeName = (name: string) => name.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+
+export function archivedFiles(repoAbs: string, name: string): string[] {
+  const dir = archivedDir(repoAbs, name);
+  if (!fs.existsSync(dir)) return [];
+  return walkMd(dir).sort((a, b) => fileOrder(a) - fileOrder(b) || a.localeCompare(b));
+}
+
 export async function listArchived(repoAbs: string): Promise<string[]> {
   const dir = path.join(repoAbs, 'openspec', 'changes', 'archive');
   if (!fs.existsSync(dir)) return [];

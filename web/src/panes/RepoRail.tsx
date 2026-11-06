@@ -4,7 +4,7 @@ import {
   Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen,
 } from 'lucide-react';
 import type { ChangeStage, ChangeSummary, RepoInfo } from '../../../shared/protocol.ts';
-import { loadRepos, openAddFolder, openChange, openSpec, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
+import { loadRepos, openAddFolder, openArchived, openChange, openSpec, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
 import { Badge, Button, Chip, cx, Dialog, IconButton, Menu, MenuItem, timeAgo, useDismiss } from '../lib/ui.tsx';
 
 const STAGES: { id: ChangeStage; label: string; hint: string }[] = [
@@ -277,8 +277,16 @@ export function RepoRail() {
                   {showArchived ? <ChevronDown size={12} /> : <ChevronRight size={12} />} Archived <span className="font-normal">{archived.length}</span>
                 </button>
                 {showArchived && (
-                  <ul className="mt-1.5 space-y-0.5 px-1">
-                    {archived.map((a) => <li key={a} className="truncate font-mono text-[11.5px] text-muted" title={a}>{a}</li>)}
+                  <ul className="mt-1.5 space-y-0.5">
+                    {archived.map((a) => (
+                      <li key={a}>
+                        <button type="button" onClick={() => openArchived(a)} title={`openspec/changes/archive/${a}`}
+                          className={cx('w-full truncate rounded-lg px-2 py-1 text-left font-mono text-[11.5px] hover:bg-surface-2',
+                            browse?.kind === 'archived' && browse.name === a ? 'bg-accent-soft text-accent' : 'text-muted hover:text-fg-2')}>
+                          {a}
+                        </button>
+                      </li>
+                    ))}
                   </ul>
                 )}
               </section>

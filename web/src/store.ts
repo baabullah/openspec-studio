@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentInfo, ChangeSummary, ClientMsg, SpecSummary, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
+  AgentInfo, ArchivedChange, ChangeSummary, ClientMsg, SpecSummary, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
 } from '../../shared/protocol.ts';
 import { api } from './lib/api.ts';
 
@@ -10,7 +10,12 @@ const ls = {
 };
 
 /** A read-only document open in the middle pane instead of an active change. */
-export type Browse = { kind: 'spec'; name: string; file: string };
+export type Browse =
+  | { kind: 'spec'; name: string; file: string }
+  /** file: an artifact of the archived change, or HISTORY_TAB */
+  | { kind: 'archived'; name: string; file: string; data: ArchivedChange };
+
+export const HISTORY_TAB = '__history__';
 
 export interface Toast { id: number; text: string; level: 'info' | 'error' }
 
@@ -227,6 +232,7 @@ export async function loadChanges() {
   set({ changes: r.active, archived: r.archived, specs: r.specs, changesLoaded: true });
   const { browse } = get();
   if (browse?.kind === 'spec' && !r.specs.some((x) => x.name === browse.name)) set({ browse: null, content: '' });
+  if (browse?.kind === 'archived' && !r.archived.includes(browse.name)) set({ browse: null, content: '' });
   const { change } = get();
   if (change && !r.active.some((c) => c.name === change)) set({ change: null, file: null, content: '' });
 }
@@ -245,7 +251,8 @@ export async function openFile(file: string) {
 /** Path (relative to <repo>/openspec) of the document shown in the middle pane, if any. */
 function docPath(): string | null {
   const { change, file, browse } = get();
-  if (browse) return browse.file;
+  if (browse?.kind === 'spec') return browse.file;
+  if (browse?.kind === 'archived') return browse.file === HISTORY_TAB ? null : `changes/archive/${browse.name}/${browse.file}`;
   if (!change || !file || file === '__changes__') return null;
   return `changes/${change}/${file}`;
 }
@@ -256,6 +263,24 @@ async function reloadFile() {
   if (!repo || !path) return;
   const r = await api.file(repo, path).catch(() => null);
   if (get().repo === repo && docPath() === path) set({ content: r?.content ?? '' });
+}
+
+/** Open an archived change, read-only: its artifacts and its review history. */
+export async function openArchived(name: string) {
+  const repo = get().repo;
+  if (!repo) return;
+  const data = await guard(api.archived(repo, name));
+  if (!data || get().repo !== repo) return;
+  set({ browse: { kind: 'archived', name, file: data.files[0] ?? HISTORY_TAB, data }, change: null, file: null, content: '', comments: [], rounds: [], focusComment: null });
+  await reloadFile();
+}
+
+/** Switch the tab of an open archived change. */
+export async function openArchivedFile(file: string) {
+  const { browse } = get();
+  if (browse?.kind !== 'archived') return;
+  set({ browse: { ...browse, file }, content: '' });
+  await reloadFile();
 }
 
 /** Open a main spec, read-only. */

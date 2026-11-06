@@ -21,3 +21,17 @@ describe('listSpecs', () => {
     expect(listSpecs(path.join(repo, 'nowhere'))).toEqual([]);
   });
 });
+
+describe('archived changes', () => {
+  it('maps the dated folder back to the change name and lists its artifacts', async () => {
+    const { archivedChangeName, archivedFiles } = await import('../src/openspec.ts');
+    expect(archivedChangeName('2026-11-06-add-notes')).toBe('add-notes');
+    expect(archivedChangeName('add-notes')).toBe('add-notes');
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-arch-'));
+    const dir = path.join(repo, 'openspec', 'changes', 'archive', '2026-11-06-add-notes');
+    fs.mkdirSync(path.join(dir, 'specs', 'notes'), { recursive: true });
+    for (const f of ['tasks.md', 'proposal.md', 'design.md', 'specs/notes/spec.md', '.openspec.yaml']) fs.writeFileSync(path.join(dir, f), '#');
+    expect(archivedFiles(repo, '2026-11-06-add-notes')).toEqual(['proposal.md', 'design.md', 'specs/notes/spec.md', 'tasks.md']) // same order as active changes;
+    expect(archivedFiles(repo, 'missing')).toEqual([]);
+  });
+});

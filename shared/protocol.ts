@@ -71,6 +71,17 @@ export interface ChangeSummary {
 /** A capability's main spec: openspec/specs/<name>/spec.md */
 export interface SpecSummary { name: string; file: string; requirements: number }
 
+/** An archived change (openspec/changes/archive/<name>) with the review history Studio kept for it. */
+export interface ArchivedChange {
+  name: string;        // folder name, e.g. 2026-11-06-add-notes
+  change: string;      // the change's name before archiving, e.g. add-notes
+  files: string[];     // artifacts, relative to the archived folder
+  comments: ReviewComment[];
+  rounds: ReviewRound[];
+  /** history not shown because an active change has the same name again */
+  historyHidden: boolean;
+}
+
 export type ChangeStage = 'draft' | 'review' | 'ready' | 'applying' | 'done';
 
 export type LifecycleAction = 'propose' | 'explore' | 'update' | 'apply' | 'sync' | 'archive';
