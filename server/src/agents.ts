@@ -20,6 +20,7 @@ const SKILL: Record<LifecycleAction, string> = {
   update: 'openspec-update-change',
   apply: 'openspec-apply-change',
   sync: 'openspec-sync-specs',
+  verify: 'openspec-verify-change',
   archive: 'openspec-archive-change',
 };
 const slash = (a: LifecycleAction, args: string) => `/opsx:${a} ${args}`.trim();

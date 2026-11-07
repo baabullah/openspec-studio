@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { runCmd } from './proc.ts';
-import type { ArtifactStatus, ChangeStage, ChangeSummary, ChangeValidation, ReviewComment, SpecSummary, StaleArtifact } from '../../shared/protocol.ts';
+import type { ArtifactStatus, OptionalWorkflow, ChangeStage, ChangeSummary, ChangeValidation, ReviewComment, SpecSummary, StaleArtifact } from '../../shared/protocol.ts';
 
 const OPENSPEC = process.env.OPENSPEC_BIN || 'openspec';
 const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
@@ -208,6 +208,36 @@ export function archivedFiles(repoAbs: string, name: string): string[] {
   const dir = archivedDir(repoAbs, name);
   if (!fs.existsSync(dir)) return [];
   return walkMd(dir).sort((a, b) => fileOrder(a) - fileOrder(b) || a.localeCompare(b));
+}
+
+// What `openspec init/update` writes for an optional workflow, per tool: a command
+// (e.g. .claude/commands/opsx/verify.md) and/or a skill folder (…/skills/openspec-verify-change/).
+const OPTIONAL: Record<OptionalWorkflow, { command: string; skill: string }> = {
+  verify: { command: 'verify.md', skill: 'openspec-verify-change' },
+};
+
+/**
+ * Optional workflows installed in the repo for any tool. They are enabled
+ * globally with `openspec config profile`, then written by `openspec update`.
+ */
+export function installedWorkflows(repoAbs: string): OptionalWorkflow[] {
+  const found = new Set<OptionalWorkflow>();
+  const walk = (dir: string, depth: number) => {
+    if (depth > 4) return;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      for (const [id, w] of Object.entries(OPTIONAL) as [OptionalWorkflow, (typeof OPTIONAL)[OptionalWorkflow]][]) {
+        if ((e.isDirectory() && e.name === w.skill) || (e.isFile() && e.name === w.command && path.basename(dir) === 'opsx')) found.add(id);
+      }
+      if (e.isDirectory() && e.name !== 'node_modules') walk(path.join(dir, e.name), depth + 1);
+    }
+  };
+  // tool folders live at the repo root and start with a dot (.claude, .codex, .codebuddy, .agents, …)
+  let top: fs.Dirent[] = [];
+  try { top = fs.readdirSync(repoAbs, { withFileTypes: true }); } catch { /* unreadable */ }
+  for (const e of top) if (e.isDirectory() && e.name.startsWith('.') && e.name !== '.git') walk(path.join(repoAbs, e.name), 1);
+  return [...found];
 }
 
 export async function listArchived(repoAbs: string): Promise<string[]> {

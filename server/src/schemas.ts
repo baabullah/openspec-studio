@@ -8,7 +8,7 @@ import type { ClientMsg } from '../../shared/protocol.ts';
 const capped = (max: number) => z.string().transform((s) => s.slice(0, max));
 const repo = z.string().min(1);
 
-export const LIFECYCLE = ['propose', 'explore', 'update', 'apply', 'sync', 'archive'] as const;
+export const LIFECYCLE = ['propose', 'explore', 'update', 'apply', 'verify', 'sync', 'archive'] as const;
 export const COMMENT_KINDS = ['comment', 'change', 'remove', 'question', 'ok'] as const;
 
 export const rootBody = z.object({ path: z.string().default('') });

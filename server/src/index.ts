@@ -147,7 +147,7 @@ app.get('/api/changes', async (c) => {
     openspec.listChanges(abs, (ch) => comments.list(repo, ch)),
     openspec.listArchived(abs),
   ]);
-  return c.json({ active, archived, specs: openspec.listSpecs(abs) });
+  return c.json({ active, archived, specs: openspec.listSpecs(abs), workflows: openspec.installedWorkflows(abs) });
 });
 
 app.get('/api/file', (c) => {
@@ -167,7 +167,7 @@ app.post('/api/action', async (c) => {
   const s = hub.get(repo);
   if (!s) return c.json({ error: 'no agent session' }, 409);
   const { action } = b;
-  const needsChange = ['update', 'apply', 'sync', 'archive'].includes(action);
+  const needsChange = ['update', 'apply', 'verify', 'sync', 'archive'].includes(action);
   if (needsChange && !validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
   const text = (b.text ?? '').trim();
   const args = [needsChange ? b.change : '', text].filter(Boolean).join(' ');

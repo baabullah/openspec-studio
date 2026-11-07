@@ -62,3 +62,24 @@ describe('computeStaleness', async () => {
     expect(computeStaleness(graph, at({ proposal: 30_000, specs: 10_000 }))).toEqual([{ id: 'specs', because: ['proposal'] }]);
   });
 });
+
+describe('installedWorkflows', () => {
+  it('finds optional workflows from the files openspec writes per tool', async () => {
+    const { installedWorkflows } = await import('../src/openspec.ts');
+    const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-wf-'));
+    fs.mkdirSync(path.join(repo, '.claude', 'commands', 'opsx'), { recursive: true });
+    fs.writeFileSync(path.join(repo, '.claude', 'commands', 'opsx', 'apply.md'), '#');
+    expect(installedWorkflows(repo)).toEqual([]); // core profile only
+    fs.writeFileSync(path.join(repo, '.claude', 'commands', 'opsx', 'verify.md'), '#');
+    expect(installedWorkflows(repo)).toEqual(['verify']);
+    // Codex gets skills only
+    const codex = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-wf-'));
+    fs.mkdirSync(path.join(codex, '.codex', 'skills', 'openspec-verify-change'), { recursive: true });
+    expect(installedWorkflows(codex)).toEqual(['verify']);
+    // a verify.md outside an opsx folder is not it
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-wf-'));
+    fs.mkdirSync(path.join(other, '.github'), { recursive: true });
+    fs.writeFileSync(path.join(other, '.github', 'verify.md'), '#');
+    expect(installedWorkflows(other)).toEqual([]);
+  });
+});

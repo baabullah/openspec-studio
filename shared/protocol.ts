@@ -108,7 +108,10 @@ export interface ArchivedChange {
 
 export type ChangeStage = 'draft' | 'review' | 'ready' | 'applying' | 'done';
 
-export type LifecycleAction = 'propose' | 'explore' | 'update' | 'apply' | 'sync' | 'archive';
+export type LifecycleAction = 'propose' | 'explore' | 'update' | 'apply' | 'verify' | 'sync' | 'archive';
+
+/** OpenSpec workflows outside the core profile that Studio can drive when a repo has them installed. */
+export type OptionalWorkflow = 'verify';
 
 // ---- Review -----------------------------------------------------------------
 export type CommentKind = 'comment' | 'change' | 'remove' | 'question' | 'ok';
