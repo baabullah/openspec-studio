@@ -6,7 +6,13 @@ documents Google-Docs style, and watch the coding agent work live, including its
 
 > **Status:** early, personal project. It works for daily use, but expect rough edges.
 
-![Reviewing a proposal: comments in the margin, one per highlight](docs/review.png)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/review-dark.png">
+  <img src="docs/review.png" alt="Reviewing a proposal: comments in the margin next to their highlights, the change board on the left, Claude Code on the right">
+</picture>
+
+<sub>Every screenshot in this README comes from a real session: the demo repo from <code>npm run demo-repo</code>, reviewed, built
+and archived by Claude Code (Sonnet 5.5), well under a dollar in tokens.</sub>
 
 **Contents:**
 [What it is](#what-it-is) ·
@@ -57,6 +63,22 @@ Without Studio, all of this happens through slash commands typed into an agent's
 - **Nothing lost on reload.** The server owns the agent session, the event log, comments and review rounds, so you can
   close the tab, reload, or come back later.
 
+### At a glance
+<table>
+<tr>
+<td width="50%"><img src="docs/round-result.png" alt="After a review round: each comment shows the agent's verdict and note"><br><b>Review rounds.</b> Every comment comes back with a verdict and a note from the agent.</td>
+<td width="50%"><img src="docs/what-changed.png" alt="What changed: word-level diff per file for a review round"><br><b>What changed.</b> A word-level diff per file, for every round.</td>
+</tr>
+<tr>
+<td><img src="docs/permission.png" alt="A permission request pinned above the chat box"><br><b>Decisions pinned.</b> Permission requests and questions wait above the chat box.</td>
+<td><img src="docs/build-done.png" alt="Build finished: tasks ticked, commands and changed files listed"><br><b>Build, checked.</b> Tasks tick off live; the turn lists what really ran and changed.</td>
+</tr>
+<tr>
+<td><img src="docs/validation.png" alt="OpenSpec validation findings with an Ask agent to fix button"><br><b>Checks.</b> <code>openspec validate</code> findings and out-of-date artifacts, one click to fix.</td>
+<td><img src="docs/archived-history.png" alt="An archived change with its review history"><br><b>History.</b> Archived changes keep their review rounds; main specs are one click away.</td>
+</tr>
+</table>
+
 ### How it fits together
 ```
 Browser (React) ⇄ WebSocket/REST ⇄ Node server ⇄ ACP over stdio ⇄ agent (cwd = repo)
@@ -104,26 +126,10 @@ repo with one change ready for review (see [Making a tutorial or demo](#making-a
 ---
 
 ## The screen
-Studio is one page with three columns:
+Studio is one page with three columns: the repo rail on the left, the document under review in the middle, the agent on
+the right.
 
-```
-┌──────────────────┬────────────────────────────────────────────┬──────────────────────┐
-│ OpenSpec Studio  │ change-name   0/3 tasks   2 open comments  │ Claude Code   Ready  │
-│ [Repository   ▾] │ proposal ② · design · spec: x · tasks      │ MODE ▾     MODEL ▾   │
-│ [+ New change]   │────────────────────────────────────────────│──────────────────────│
-│                  │                                 ┌────────┐ │ you: Apply · change  │
-│ IN REVIEW  1     │  # Proposal: …                  │ Change │ │ agent message        │
-│ ┌──────────────┐ │  ## Why                         │ Draft  │ │ ▸ tool call  ✓       │
-│ │ change-name  │ │  text with ▒highlight▒ …        └────────┘ │ ▸ plan               │
-│ │ ✓Proposal ✓… │ │                                 margin     │ ──── done ────       │
-│ │ Build ▓░ 1/3 │ │                                 comments   │ NEEDS YOUR DECISION  │
-│ │ [  Review  ] │ │                                            │ [Allow] [Reject]     │
-│ └──────────────┘ │────────────────────────────────────────────│──────────────────────│
-│ ▸ Archived 3     │ Note on doc · Note on change [Send review] │ Message the agent… ➤ │
-│ ◐                │                                            │                      │
-└──────────────────┴────────────────────────────────────────────┴──────────────────────┘
-  left: repos & changes     middle: the document under review       right: the agent
-```
+![The three columns: change board, the proposal with margin comments after a review round, and the agent transcript](docs/round-result.png)
 
 | area | what is there |
 |---|---|
@@ -139,7 +145,11 @@ above the document. The theme toggle at the bottom left cycles **system → ligh
 ## Walkthrough: from an empty folder to an archived change
 
 ### 1. Add the folder with your repos
-On first start the middle pane says *"Add the folder with your repos"*. Click **Add folder** (or open the repo menu →
+On first start the middle pane says *"Add the folder with your repos"*.
+
+<img src="docs/empty-state.png" alt="First start: Add the folder with your repos" width="640">
+
+ Click **Add folder** (or open the repo menu →
 **Add folder…**). The dialog is a small folder browser:
 - It starts at your home folder and the folders you already added (on Windows, also every drive). Click a folder to go
   into it; **↑** goes up a level, **⌂** returns to the start.
@@ -178,6 +188,8 @@ Click **New change**. The dialog has two modes:
   `proposal.md`, the delta specs, `design.md` and `tasks.md`.
 - **Explore first**: think the idea through with the agent before committing to a change (the text is optional).
 
+<img src="docs/new-change.png" alt="The New change dialog with a proposal written in" width="49%"> <img src="docs/drafting.png" alt="The new change under Drafting while the design is still missing" width="49%">
+
 Ctrl/Cmd+Enter submits. The agent's work streams into the right panel, and the new change appears in the left rail as
 soon as its folder exists. Studio watches the files, so documents update live while the agent writes them.
 
@@ -193,6 +205,8 @@ button. Within a stage the newest change comes first; with four or more changes 
 | **Ready to build** | reviewed (comments exist and all are resolved), no task done yet | **Build it** | runs apply: the agent implements the tasks |
 | **Building** | some tasks are checked | **Continue** | runs apply again to continue |
 | **Done** | every task is checked | **Archive** (and **Verify**, when installed) | Verify asks the agent to check the code against the specs; Archive asks for confirmation, then runs archive |
+
+![A reviewed change under Ready to build, with its next task and the Build it button](docs/ready-to-build.png)
 
 A shield mark with a number on a card means `openspec validate` found problems in the change (see
 [Checks on the open change](#checks-on-the-open-change)).
@@ -217,11 +231,18 @@ requests (file edits, shell commands) and answer them. When the turn ends, its e
 according to the agent's tool calls, e.g. **ran 2 commands · 1 failed · changed 2 files**; click it for each command
 with ✓/✗ and each file, so "all tests pass" is something you can check, not just read.
 
+<img src="docs/building.png" alt="Building: the agent asks to run npm test" width="49%"> <img src="docs/build-done.png" alt="Build done: 3/3 tasks, the commands it ran and the files it changed" width="49%">
+
 ### 9. Sync and archive
 When all tasks are done the change moves to **Done**. **Archive** opens a confirmation: the agent checks that the change
 is complete, merges its delta specs into the main specs and moves the folder to `openspec/changes/archive/`. Use **Sync
 specs** from the ⋯ menu to merge the specs without archiving. Archived changes are listed under **Archived** at the
 bottom of the rail.
+
+<img src="docs/archive-dialog.png" alt="The Archive confirmation" width="49%"> <img src="docs/agent-question.png" alt="During archive the agent asks how to sync the specs" width="49%">
+
+The agent may ask questions on the way, like whether to sync the specs first; they appear as a form under **Needs your
+decision** (right).
 
 ### 10. Look back: archived changes and main specs
 Both are read-only views in the middle pane (a **read-only** tag in the header; no comment toolbar, no review bar):
@@ -233,6 +254,8 @@ Both are read-only views in the middle pane (a **read-only** tag in the header; 
 - **Specs** (collapsible): the main specs in `openspec/specs/`, one per capability with its number of requirements.
   Click one to read its `spec.md`: what the system does today, after every archived change was merged in. It updates
   live when a sync or archive changes it.
+
+<img src="docs/archived-history.png" alt="Archived change: History tab with the review round" width="49%"> <img src="docs/main-spec.png" alt="Main spec greeting, read-only" width="49%">
 
 To change a spec, start a new change; specs are not edited directly.
 
@@ -249,6 +272,8 @@ Two bars can appear under the change's header, and both clear by themselves once
   artifact was edited after the ones that depend on it (OpenSpec's own dependency order: proposal → specs and design →
   tasks). The affected tabs get an amber dot. **Check coherence** asks the agent to bring exactly those artifacts in line
   and change nothing else; **Dismiss** hides the warning until something changes again.
+
+<img src="docs/validation.png" alt="Validation bar expanded: an error and a warning in the spec" width="49%"> <img src="docs/stale.png" alt="Stale bar: the proposal changed after the specs and tasks" width="49%">
 
 ### Leaving comments
 There are four ways to comment:
@@ -293,6 +318,8 @@ header shows the total. A new comment is a **Draft**: you can edit (✎) or dele
 While the agent works, the bar shows **Agent is revising…** and sent comments show **With agent** (they cannot be
 edited or deleted until the round ends). Approve comments are resolved right away.
 
+![While the agent revises, sent comments show With agent and its requests wait under Needs your decision](docs/permission.png)
+
 ### Reading the result
 When the turn ends, each comment shows the agent's verdict and note:
 
@@ -309,6 +336,8 @@ round, newest first: round number and time, the comments it covered (click one t
 warnings such as *agent sent no report* or the stop reason, and a **word-level diff per file** (long unchanged stretches
 are collapsed).
 
+![What changed: Round 1 with its comments and the diff of proposal.md, design.md and the spec](docs/what-changed.png)
+
 ### Closing the loop
 For each answered comment, either **Resolve** it (✓) or **Reopen** it: reopening opens the editor so you can refine the
 note, and the comment goes out again with the next round. **N to check · resolve addressed** in the review bar resolves
@@ -324,6 +353,8 @@ round with whatever the agent did so far). Starting another lifecycle action als
 Spec files (main and delta) are rendered with their structure: **Requirement** and **Scenario** labels, a separator
 between requirements, indented scenario steps with **WHEN** / **THEN** / **GIVEN** pills, emphasised SHALL / MUST / MAY,
 and a coloured edge on ADDED / MODIFIED / REMOVED sections. Comments work the same on them.
+
+![A delta spec rendered with Requirement and Scenario labels, WHEN/THEN pills and SHALL emphasised](docs/spec-structured.png)
 
 ### Keeping the review with the change
 In the **Repository** menu, **Keep review history in <repo>** writes each change's comments and finished review rounds
@@ -345,9 +376,6 @@ document"* and moves to the Notes block.
 ### Header
 - **Agent name ▾**: choose the agent for this repo (only while disconnected). The choice is remembered per repo.
 - **Status badge**: Starting · Ready · Working (with an elapsed timer) · Stopped · Error.
-- **Context gauge and cost**: how full the agent's context window is (amber from 60%, red from 85%) and the session
-  cost when the agent reports one, e.g. `8% $0.096`. Hover for the context in tokens and the token totals of the
-  current session.
 - **Stop**: cancels the current turn (only while working).
 - **⏻ menu**: **New session** (start fresh instead of resuming) and **Disconnect agent**.
 - **Session options**: whatever the agent offers, as dropdowns, e.g. *Mode* (how much the agent may do without
@@ -378,6 +406,9 @@ box under **Needs your decision**, so it cannot scroll away:
 - **Question cards** show a small form: choices (a single choice answers with one click), checkboxes, text or number
   fields, with **Submit** and **Decline**.
 
+Long commands are cut to three lines in the title; the full command scrolls in the box below it, so the buttons always
+stay in view.
+
 While a decision is pending the browser tab title reads **"(1) Needs you · OpenSpec Studio"**, and if the tab is in the
 background Studio shows a desktop notification. The same happens when a turn finishes while you are elsewhere: a
 notification such as "Done · hello-app — Apply · add-hello-endpoint" and **"✓ Agent finished"** in the tab title until you
@@ -395,6 +426,10 @@ Studio shows what the agent reports over ACP and nothing it has to guess:
 ### Chat
 The box at the bottom sends free-form messages to the agent (Enter sends, Shift+Enter adds a line). Use it to ask about
 the change or give extra instructions.
+
+Above it sit the **context gauge and cost**: how full the agent's context window is (amber from 60%, red from 85%) and
+the session cost when the agent reports one, e.g. `context 5% $0.265`. Hover for the context in tokens and the token
+totals of the current session.
 
 ---
 
@@ -536,6 +571,12 @@ Each scene lists what to click and what appears. Agent turns take from a few sec
 | 17a | Look back at it | **Archived** → `<date>-add-hello-endpoint` → **History** | the artifacts as archived (read-only), and Round 1 with each comment's verdict, the agent's notes and the diff |
 | 17b | The main specs | **Specs** → `greeting` | the new `greeting` spec with its requirement, read-only, next to the existing `health` spec |
 | 18 | Start the next one | **New change** → Propose → "Add a goodbye endpoint" → **Propose** | the agent drafts a new change; its card appears under **Drafting**, then **In review** |
+
+The screenshots in `docs/` follow this storyboard and can serve as reference frames: `empty-state` (1), `annotate` and
+`comment` (7), `review` (10), `permission` (11–12), `round-result` (13), `what-changed` (14), `spec-structured` (6),
+`ready-to-build` (15), `building` and `build-done` (16), `archive-dialog` and `agent-question` (17), `archived-history`
+(17a), `main-spec` (17b), `new-change` and `drafting` (18), `validation` and `stale` (the checks bars), `review-dark`
+(dark mode).
 
 Optional extras: reload the page to show that comments and the transcript survive; toggle dark mode; stop and restart
 the server to show the reconnect badge and the automatic refresh; open the ⋯ menu on a card to show every step.
