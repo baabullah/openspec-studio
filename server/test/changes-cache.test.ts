@@ -38,6 +38,11 @@ describe.skipIf(process.platform === 'win32')('change list CLI cache', () => {
     expect(second[0]).toMatchObject({ openComments: 0, stage: 'ready' });
     expect(runs()).toBe(3);
 
+    // Studio writing the review history into the change folder is not a reason to ask the CLI again
+    fs.writeFileSync(path.join(repo, 'openspec', 'changes', 'c1', '.studio-review.json'), '{}');
+    await listChanges(repo, () => comments);
+    expect(runs()).toBe(3);
+
     // the agent edits an artifact: the CLI runs again
     fs.writeFileSync(path.join(repo, 'openspec', 'changes', 'c1', 'tasks.md'), '- [x] 1.1 do it\n- [ ] 1.2 more\n');
     await listChanges(repo, () => comments);

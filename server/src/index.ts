@@ -12,10 +12,11 @@ import { comments, db, events, migrateRepoIds, rounds } from './db.ts';
 import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
 import { hasOpenSpec, safeResolve, STUDIO_DIR, STUDIO_VERSION } from './repos.ts';
-import { addRoot, browse, findRepos, removeRoot, repoPath, roots, seedRoots } from './workspace.ts';
+import { addRoot, browse, findRepos, removeRoot, repoPath, reviewInRepo, roots, seedRoots, setReviewInRepo } from './workspace.ts';
+import { readReviewFile, REVIEW_FILE, writeReviewFile } from './review/repoFile.ts';
 import { allowedHostnames, hostAllowed, mutationAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
-import { actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
+import { settingsBody, actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
 import type { z } from 'zod';
 
 // Older versions identified repos by their path relative to a single REPOS_ROOT
@@ -52,6 +53,7 @@ function syncWatcher(repo: string) {
     const poll = abs.startsWith('/mnt/');
     const w = chokidar.watch(path.join(abs, 'openspec'), {
       ignoreInitial: true, depth: 8, awaitWriteFinish: { stabilityThreshold: 150 },
+      ignored: (p: string) => path.basename(p) === REVIEW_FILE, // Studio writes it itself
       usePolling: poll, interval: 700, binaryInterval: 2000,
     });
     w.on('all', (_ev, file) => {
@@ -64,7 +66,17 @@ function syncWatcher(repo: string) {
     watchers.delete(repo);
   }
 }
-const reviewChanged = (repo: string, change: string) => broadcast(repo, { type: 'review_changed', repo, change });
+/** Keep the repo's copy of a change's review history current (repos that opted in). */
+function exportReview(repo: string, change: string) {
+  const abs = repoPath(repo);
+  if (!abs || !reviewInRepo(repo)) return;
+  try { writeReviewFile(openspec.changeDir(abs, change), change, comments.list(repo, change), rounds.list(repo, change)); }
+  catch (e) { console.warn(`review export for ${change} failed:`, (e as Error).message); }
+}
+const reviewChanged = (repo: string, change: string) => {
+  exportReview(repo, change);
+  broadcast(repo, { type: 'review_changed', repo, change });
+};
 
 // ---- HTTP API ------------------------------------------------------------------
 const app = new Hono();
@@ -147,7 +159,7 @@ app.get('/api/changes', async (c) => {
     openspec.listChanges(abs, (ch) => comments.list(repo, ch)),
     openspec.listArchived(abs),
   ]);
-  return c.json({ active, archived, specs: openspec.listSpecs(abs), workflows: openspec.installedWorkflows(abs) });
+  return c.json({ active, archived, specs: openspec.listSpecs(abs), workflows: openspec.installedWorkflows(abs), reviewInRepo: reviewInRepo(repo) });
 });
 
 app.get('/api/file', (c) => {
@@ -186,14 +198,28 @@ app.get('/api/archived', (c) => {
   const name = c.req.query('name') ?? '';
   if (!/^[\w.-]+$/.test(name) || !fs.existsSync(openspec.archivedDir(abs, name))) return c.json({ error: 'archived change not found' }, 404);
   const change = openspec.archivedChangeName(name);
-  // the history is keyed by name: if a new active change took the same name, it is that change's
-  const historyHidden = fs.existsSync(openspec.changeDir(abs, change));
+  // the history that moved with the change wins; otherwise look it up by name in Studio's
+  // database, unless a new active change took the same name (then it is that change's)
+  const fromFile = readReviewFile(openspec.archivedDir(abs, name), repo);
+  const historyHidden = !fromFile && fs.existsSync(openspec.changeDir(abs, change));
   const body: ArchivedChange = {
     name, change, files: openspec.archivedFiles(abs, name), historyHidden,
-    comments: historyHidden ? [] : comments.list(repo, change),
-    rounds: historyHidden ? [] : rounds.list(repo, change),
+    comments: fromFile?.comments ?? (historyHidden ? [] : comments.list(repo, change)),
+    rounds: fromFile?.rounds ?? (historyHidden ? [] : rounds.list(repo, change)),
   };
   return c.json(body);
+});
+
+// per-repo settings
+app.post('/api/settings', async (c) => {
+  const b = await body(c, settingsBody);
+  const { repo, abs } = repoOf(c, b.repo);
+  setReviewInRepo(repo, b.reviewInRepo);
+  // turning it on writes the history that already exists
+  if (b.reviewInRepo) for (const ch of fs.existsSync(path.join(abs, 'openspec', 'changes')) ? fs.readdirSync(path.join(abs, 'openspec', 'changes')) : []) {
+    if (ch !== 'archive' && validChange(abs, ch)) exportReview(repo, ch);
+  }
+  return c.json({ reviewInRepo: reviewInRepo(repo) });
 });
 
 // ---- review API
@@ -201,6 +227,14 @@ app.get('/api/review', (c) => {
   const { repo, abs } = repoOf(c);
   const change = c.req.query('change');
   if (!validChange(abs, change)) return c.json({ comments: [], rounds: [] });
+  // a change reviewed elsewhere (e.g. a teammate's branch) brings its history in the repo
+  if (!comments.list(repo, change).length && !rounds.list(repo, change).length) {
+    const file = readReviewFile(openspec.changeDir(abs, change), repo);
+    if (file) {
+      for (const cm of file.comments) comments.put({ ...cm, change });
+      for (const r of file.rounds) rounds.put({ ...r, change }, {});
+    }
+  }
   return c.json({ comments: comments.list(repo, change), rounds: rounds.list(repo, change) });
 });
 

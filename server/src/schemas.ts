@@ -20,6 +20,7 @@ export const actionBody = z.object({
   text: capped(4000).optional(),
 });
 export const changeBody = z.object({ repo, change: z.string() });
+export const settingsBody = z.object({ repo, reviewInRepo: z.boolean() });
 
 const anchor = z.object({
   exact: z.string(),

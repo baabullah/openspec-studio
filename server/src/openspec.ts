@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { runCmd } from './proc.ts';
+import { REVIEW_FILE } from './review/repoFile.ts';
 import type { ArtifactStatus, OptionalWorkflow, ChangeStage, ChangeSummary, ChangeValidation, ReviewComment, SpecSummary, StaleArtifact } from '../../shared/protocol.ts';
 
 const OPENSPEC = process.env.OPENSPEC_BIN || 'openspec';
@@ -93,11 +94,14 @@ export function openspecSignature(repoAbs: string): string {
     let entries: fs.Dirent[];
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (e.name === REVIEW_FILE) continue; // Studio's own file: the CLI's answer doesn't depend on it
       const full = path.join(dir, e.name);
       try {
         const st = fs.statSync(full);
-        parts.push(`${full}|${st.size}|${st.mtimeMs}`);
-        if (st.isDirectory()) walk(full);
+        // a folder's own mtime changes whenever any file is added to it (including ours);
+        // its entries are listed anyway, so record folders by name only
+        if (st.isDirectory()) { parts.push(`${full}/`); walk(full); }
+        else parts.push(`${full}|${st.size}|${st.mtimeMs}`);
       } catch { /* vanished meanwhile */ }
     }
   };

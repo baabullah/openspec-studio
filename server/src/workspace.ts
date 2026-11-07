@@ -12,7 +12,7 @@ import { DATA_DIR, safeResolve, within } from './repos.ts';
 const CONFIG = path.join(DATA_DIR, 'config.json');
 const ENV_ROOT = process.env.REPOS_ROOT ? path.resolve(process.env.REPOS_ROOT) : null;
 
-interface Config { roots: string[] }
+interface Config { roots: string[]; /** repos (ids) that keep their review history in the repo */ reviewInRepo?: string[] }
 
 const real = (p: string) => { try { return fs.realpathSync.native(p); } catch { return null; } };
 const isDir = (p: string) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
@@ -20,7 +20,8 @@ const isDir = (p: string) => { try { return fs.statSync(p).isDirectory(); } catc
 function readConfig(): Config | null {
   try {
     const c = JSON.parse(fs.readFileSync(CONFIG, 'utf8'));
-    return { roots: Array.isArray(c.roots) ? c.roots.filter((r: unknown): r is string => typeof r === 'string') : [] };
+    const strings = (v: unknown) => (Array.isArray(v) ? v.filter((r: unknown): r is string => typeof r === 'string') : []);
+    return { roots: strings(c.roots), reviewInRepo: strings(c.reviewInRepo) };
   } catch { return null; }
 }
 function writeConfig(c: Config) {
@@ -38,7 +39,7 @@ export function seedRoots(folders: string[]) {
   if (existing && !add.length) return;
   const all = [...(existing?.roots ?? [])];
   for (const f of add) if (!all.some((r) => real(r) === real(f))) all.push(f);
-  config = { roots: all };
+  config = { ...existing, roots: all };
   writeConfig(config);
   invalidate();
 }
@@ -64,7 +65,7 @@ export function addRoot(input: unknown): string {
   if (!p || !isDir(p)) throw new Error(`Folder not found: ${raw}`);
   if (path.dirname(p) === p) throw new Error('Pick a more specific folder than the whole drive');
   if (!roots().some((r) => r.path === p)) {
-    config = { roots: [...config.roots, p] };
+    config = { ...config, roots: [...config.roots, p] };
     writeConfig(config);
   }
   invalidate();
@@ -73,9 +74,19 @@ export function addRoot(input: unknown): string {
 
 export function removeRoot(p: unknown) {
   if (typeof p !== 'string') return;
-  config = { roots: config.roots.filter((r) => r !== p && real(r) !== p) };
+  config = { ...config, roots: config.roots.filter((r) => r !== p && real(r) !== p) };
   writeConfig(config);
   invalidate();
+}
+
+/** Does this repo keep its review history in the repo (opt-in)? */
+export const reviewInRepo = (repo: string) => (config.reviewInRepo ?? []).includes(repo);
+
+export function setReviewInRepo(repo: string, on: boolean) {
+  const set = new Set(config.reviewInRepo ?? []);
+  if (on) set.add(repo); else set.delete(repo);
+  config = { ...config, reviewInRepo: [...set] };
+  writeConfig(config);
 }
 
 // ---- repo discovery ------------------------------------------------------------
