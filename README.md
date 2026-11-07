@@ -183,7 +183,8 @@ soon as its folder exists. Studio watches the files, so documents update live wh
 
 ### 6. Follow the change through its stages
 Each change card shows its name, last edit time, open comment count, the artifact chips (✓ when written), a **Build**
-progress bar from the `tasks.md` checkboxes, and one primary button:
+progress bar from the `tasks.md` checkboxes, the next unchecked task while building ("Next: 1.2 …"), and one primary
+button. Within a stage the newest change comes first; with four or more changes a **Filter changes…** box appears.
 
 | stage (rail heading) | meaning | primary button | what it does |
 |---|---|---|---|
@@ -191,14 +192,18 @@ progress bar from the `tasks.md` checkboxes, and one primary button:
 | **In review** | all artifacts written; not reviewed yet, or comments still open | **Review** | opens the change in the middle pane |
 | **Ready to build** | reviewed (comments exist and all are resolved), no task done yet | **Build it** | runs apply: the agent implements the tasks |
 | **Building** | some tasks are checked | **Continue** | runs apply again to continue |
-| **Done** | every task is checked | **Archive** | asks for confirmation, then runs archive |
+| **Done** | every task is checked | **Archive** (and **Verify**, when installed) | Verify asks the agent to check the code against the specs; Archive asks for confirmation, then runs archive |
 
 A shield mark with a number on a card means `openspec validate` found problems in the change (see
 [Checks on the open change](#checks-on-the-open-change)).
 
 The **⋯** menu on each card offers every step at any time: **Open for review**, **Explore with agent**, **Check
-coherence** (the update workflow: the agent makes the artifacts consistent with each other), **Build (apply)**, **Sync
-specs** and **Archive…**. Actions are disabled while the agent is working.
+coherence** (the update workflow: the agent makes the artifacts consistent with each other), **Build (apply)**, **Verify
+implementation**, **Sync specs** and **Archive…**. Actions are disabled while the agent is working.
+
+**Verify** is one of OpenSpec's optional workflows: the agent checks completeness, correctness and coherence of the code
+against the change, and changes nothing. Enable it with `openspec config profile`, then run `openspec update` in the
+repo; Studio offers it once the repo has it installed.
 
 ### 7. Review the documents
 Open a change (click its card or **Review**). Read each tab and leave comments, then click **Send review**. The agent
@@ -208,7 +213,9 @@ This loop is described in detail in [Reviewing in depth](#reviewing-in-depth).
 ### 8. Build
 When every comment is resolved, the change moves to **Ready to build**. Click **Build it**. The agent implements the
 tasks and ticks them off in `tasks.md`; the progress bar fills as it goes. Watch the right panel for permission
-requests (file edits, shell commands) and answer them.
+requests (file edits, shell commands) and answer them. When the turn ends, its end line says what actually happened
+according to the agent's tool calls, e.g. **ran 2 commands · 1 failed · changed 2 files**; click it for each command
+with ✓/✗ and each file, so "all tests pass" is something you can check, not just read.
 
 ### 9. Sync and archive
 When all tasks are done the change moves to **Done**. **Archive** opens a confirmation: the agent checks that the change
@@ -313,6 +320,18 @@ If the review turn ends early (refusal, error, token or step limit), the round s
 stopped (reason)** with **Continue** (asks the agent to carry on where it left off) and **Close round** (finish the
 round with whatever the agent did so far). Starting another lifecycle action also closes a waiting round.
 
+### Specs read as specs
+Spec files (main and delta) are rendered with their structure: **Requirement** and **Scenario** labels, a separator
+between requirements, indented scenario steps with **WHEN** / **THEN** / **GIVEN** pills, emphasised SHALL / MUST / MAY,
+and a coloured edge on ADDED / MODIFIED / REMOVED sections. Comments work the same on them.
+
+### Keeping the review with the change
+In the **Repository** menu, **Keep review history in <repo>** writes each change's comments and finished review rounds
+to `openspec/changes/<change>/.studio-review.json` whenever the review changes. Commit it and the review travels with the
+branch and the PR; `openspec archive` moves it along with the change. It holds no machine-specific paths and is only
+rewritten when its content changes. Studio always reads these files: an archived change shows the history from its
+file, and an active change with no history in Studio (a teammate's branch) imports it.
+
 ### Comments survive edits
 A comment is anchored by its quote plus the text around it, with the heading path and line as tie-breaks and fuzzy
 matching as a fallback. After the agent rewrites a document, comments re-attach to the same text. A comment whose text
@@ -404,7 +423,7 @@ the change or give extra instructions.
 | `~/.openspec-studio/studio.db` | agent session ids (for resume), the event log, comments, review rounds with snapshots and diffs |
 | `~/.openspec-studio/config.json` | the folders you added |
 | `~/.openspec-studio/agents.json` | your custom agents (optional, you write it) |
-| your repo | Studio itself writes nothing there. `openspec init` (when you click Initialize) and the agent do. |
+| your repo | Nothing by default. With **Keep review history** on: `.studio-review.json` in each reviewed change folder. `openspec init` (when you click Initialize) and the agent write there too. |
 
 ### Limits
 - Files larger than 2 MB (`MAX_DOC_BYTES`) are not opened or snapshotted.
