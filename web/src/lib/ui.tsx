@@ -55,12 +55,12 @@ export function useDismiss<T extends HTMLElement>(open: boolean, onClose: () => 
   return ref;
 }
 
-export function Menu({ trigger, children, align = 'left', className }: { trigger: (open: () => void) => ReactNode; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; className?: string }) {
+export function Menu({ trigger, children, align = 'left', className, rootClassName }: { trigger: (open: () => void) => ReactNode; children: (close: () => void) => ReactNode; align?: 'left' | 'right'; className?: string; rootClassName?: string }) {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
   const ref = useDismiss<HTMLDivElement>(open, close);
   return (
-    <div className="relative" ref={ref}>
+    <div className={cx('relative', rootClassName)} ref={ref}>
       {trigger(() => setOpen((o) => !o))}
       {open && (
         <div className={cx('absolute z-40 mt-1 min-w-48 rounded-xl border border-line bg-surface p-1 shadow-pop', align === 'right' ? 'right-0' : 'left-0', className)}>

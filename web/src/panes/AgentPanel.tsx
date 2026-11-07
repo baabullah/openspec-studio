@@ -4,6 +4,7 @@ import { cancelTurn, sendPrompt, setAgent, setConfig, startAgent, stopAgent, use
 import { Badge, Button, cx, IconButton, Menu, MenuItem, Spinner } from '../lib/ui.tsx';
 import { fold, type Item } from '../agent/transcript.ts';
 import { ContextMeter, TurnUsageLine } from '../agent/usage.tsx';
+import { TurnWorkLine } from '../agent/TurnWorkLine.tsx';
 import { ElicitationCard, FilesView, MessageView, NoticeView, PermissionCard, PlanView, ThoughtView, ToolCard, TurnEnd } from '../agent/cards.tsx';
 
 function Row({ it, last }: { it: Item; last?: boolean }) {
@@ -26,7 +27,7 @@ function Row({ it, last }: { it: Item; last?: boolean }) {
       return it.type === 'permission' ? <PermissionCard it={it} /> : <ElicitationCard it={it} />;
     case 'notice': return <NoticeView level={it.level} text={it.text} />;
     case 'files': return <FilesView paths={it.paths} />;
-    case 'turn_end': return <>{<TurnEnd stopReason={it.stopReason} last={last} />}{it.usage && <TurnUsageLine u={it.usage} />}</>;
+    case 'turn_end': return <>{<TurnEnd stopReason={it.stopReason} last={last} />}<TurnWorkLine work={it.work} />{it.usage && <TurnUsageLine u={it.usage} />}</>;
   }
 }
 
@@ -79,19 +80,24 @@ export function AgentPanel() {
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-line bg-surface">
       {/* header */}
-      <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
+      {/* one line at any width: the agent name gives way (truncates) before the status, gauge and buttons */}
+      <div className="flex min-w-0 items-center gap-2 border-b border-line px-3 py-2.5 [&>*:not(.agent-name)]:shrink-0">
         <Bot size={16} className="text-accent" />
-        <Menu trigger={(t) => (
-          <button onClick={t} disabled={!!live} className="flex items-center gap-1 rounded-md px-1 text-[13px] font-semibold hover:bg-surface-2 disabled:hover:bg-transparent">
-            {agentLabel} {!live && <ChevronDown size={13} className="text-muted" />}
+        <Menu rootClassName="agent-name min-w-0" trigger={(t) => (
+          <button type="button" onClick={t} disabled={!!live} title={agentLabel}
+            className="flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 text-[13px] font-semibold hover:bg-surface-2 disabled:hover:bg-transparent">
+            <span className="truncate whitespace-nowrap">{agentLabel}</span> {!live && <ChevronDown size={13} className="shrink-0 text-muted" />}
           </button>
         )}>
           {(close) => agents.map((a) => <MenuItem key={a.id} onClick={() => { setAgent(a.id); close(); }} hint={a.id === agent ? '✓' : undefined}>{a.label}</MenuItem>)}
         </Menu>
-        {status && <Badge tone={status.tone}>{session?.status === 'busy' || session?.status === 'starting' ? <Spinner className="h-2.5 w-2.5" /> : null}{status.label}</Badge>}
-        {busySince && session?.status === 'busy' && <span className="text-[11px] text-muted"><Elapsed since={busySince} /></span>}
-        <div className="flex-1" />
-        {session && <ContextMeter context={session.context ?? null} totals={totals} />}
+        {status && (
+          <Badge tone={status.tone} className="whitespace-nowrap">
+            {session?.status === 'busy' || session?.status === 'starting' ? <Spinner className="h-2.5 w-2.5" /> : null}{status.label}
+            {busySince && session?.status === 'busy' && <span className="tabular-nums opacity-80"><Elapsed since={busySince} /></span>}
+          </Badge>
+        )}
+        <div className="flex-1 !shrink" />
         {session?.status === 'busy' && <Button size="sm" variant="danger" onClick={cancelTurn}><Square size={12} /> Stop</Button>}
         {live && (
           <Menu align="right" trigger={(t) => <IconButton title="Session" onClick={t}><Power size={15} /></IconButton>}>
@@ -151,6 +157,8 @@ export function AgentPanel() {
 
       {/* composer: secondary, for ad-hoc chat */}
       <div className="border-t border-line p-2.5">
+        {/* context and cost sit with the prompt, like a status line, so the header stays readable */}
+        {session && <div className="mb-1.5 flex justify-end px-1"><ContextMeter context={session.context ?? null} totals={totals} /></div>}
         <div className={cx('flex items-end gap-2 rounded-xl border border-line bg-bg px-2.5 py-1.5 focus-within:border-accent', !live && 'opacity-60')}>
           <textarea value={text} onChange={(e) => setText(e.target.value)} rows={1} disabled={!live}
             placeholder={live ? 'Message the agent…' : 'Connect to chat'}

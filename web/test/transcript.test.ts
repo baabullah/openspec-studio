@@ -74,3 +74,25 @@ describe('token usage', () => {
     expect(totals.turns).toBe(0);
   });
 });
+
+describe('turn work summary', () => {
+  it('lists the commands with their final status and the files changed, per turn', () => {
+    const { items } = fold(log(
+      { kind: 'user', text: 'old' }, tool({ sessionUpdate: 'tool_call', toolCallId: 'x', title: 'ls', kind: 'execute', status: 'completed' }),
+      { kind: 'turn_end', stopReason: 'end_turn' },
+      { kind: 'user', text: '/opsx:apply c1', label: 'Apply · c1' },
+      tool({ sessionUpdate: 'tool_call', toolCallId: 't1', title: 'npm test', kind: 'execute', status: 'in_progress' }),
+      tool({ sessionUpdate: 'tool_call', toolCallId: 't2', title: 'Edit app.js', kind: 'edit', status: 'completed', locations: [{ path: '/r/src/app.js' }] }),
+      tool({ sessionUpdate: 'tool_call', toolCallId: 't3', title: 'Write hello.js', kind: 'edit', status: 'completed', content: [{ type: 'diff', path: '/r/src/routes/hello.js', oldText: null, newText: 'x' }] }),
+      { kind: 'file_write', path: 'openspec/changes/c1/tasks.md' },
+      { kind: 'turn_end', stopReason: 'end_turn' },
+      tool({ toolCallId: 't1', status: 'failed' }), // the final status arrives late
+    ));
+    const ends = items.filter((i) => i.type === 'turn_end') as { work: unknown }[];
+    expect(ends[0].work).toEqual({ commands: [{ title: 'ls', status: 'completed' }], files: [] });
+    expect(ends[1].work).toEqual({
+      commands: [{ title: 'npm test', status: 'failed' }],
+      files: ['/r/src/app.js', '/r/src/routes/hello.js', 'openspec/changes/c1/tasks.md'],
+    });
+  });
+});

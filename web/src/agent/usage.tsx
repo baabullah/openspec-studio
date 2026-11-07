@@ -42,10 +42,10 @@ export function ContextMeter({ context, totals }: { context: ContextUsage | null
     <span className={cx('flex items-center gap-1.5 text-[11px] tabular-nums', tone)} title={lines} data-testid="context-meter">
       {pct !== null && (
         <>
-          <span className="relative h-1.5 w-10 overflow-hidden rounded-full bg-surface-2">
+          <span className="relative h-1.5 w-16 overflow-hidden rounded-full bg-surface-2">
             <span className={cx('absolute inset-y-0 left-0 rounded-full', pct >= 85 ? 'bg-bad' : pct >= 60 ? 'bg-warn' : 'bg-accent')} style={{ width: `${Math.max(pct, 2)}%` }} />
           </span>
-          {pct}%
+          context {pct}%
         </>
       )}
       {context?.cost && <span className="text-muted">{fmtCost(context.cost)}</span>}

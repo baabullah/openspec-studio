@@ -14,7 +14,10 @@ export type Item =
   | { type: 'elicitation'; key: string; id: string; message: string; schema: any; resolved: string | null }
   | { type: 'notice'; key: string; level: 'info' | 'error'; text: string }
   | { type: 'files'; key: string; paths: string[] }
-  | { type: 'turn_end'; key: string; stopReason: string; usage?: TurnUsage };
+  | { type: 'turn_end'; key: string; stopReason: string; usage?: TurnUsage; work: TurnWork };
+
+/** What a turn did, from its tool calls (not from what the agent wrote about it). */
+export interface TurnWork { commands: { title: string; status: string }[]; files: string[] }
 
 /** Tokens summed over the turns of the current agent session. */
 export interface UsageTotals { turns: number; input: number; output: number; cacheRead: number; cacheWrite: number; thought: number }
@@ -46,6 +49,10 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
   let plan: Extract<Item, { type: 'plan' }> | null = null;
   let busySince: string | null = null;
   let totals = noUsage();
+  // tool calls and file writes of the turn in progress
+  let turnTools: ToolItem[] = [];
+  let turnWrites: string[] = [];
+  const turnEnds: { item: Extract<Item, { type: 'turn_end' }>; tools: ToolItem[]; writes: string[] }[] = [];
 
   for (const { seq, at, event: e } of entries) {
     const key = String(seq);
@@ -53,10 +60,16 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
     switch (e.kind) {
       case 'user':
         items.push({ type: 'user', key, text: e.text, label: e.label, at });
+        turnTools = []; turnWrites = [];
         plan = null; busySince = at;
         break;
       case 'turn_end':
-        items.push({ type: 'turn_end', key, stopReason: e.stopReason, usage: e.usage });
+        {
+          const item: Extract<Item, { type: 'turn_end' }> = { type: 'turn_end', key, stopReason: e.stopReason, usage: e.usage, work: { commands: [], files: [] } };
+          items.push(item);
+          turnEnds.push({ item, tools: turnTools, writes: turnWrites });
+          turnTools = []; turnWrites = [];
+        }
         busySince = null;
         if (e.usage) {
           totals.turns++;
@@ -69,6 +82,7 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
         if (/^New .* session started\./.test(e.text)) totals = noUsage(); // a fresh session starts counting again
         break;
       case 'file_write':
+        turnWrites.push(e.path);
         if (last?.type === 'files') { if (!last.paths.includes(e.path)) last.paths.push(e.path); }
         else items.push({ type: 'files', key, paths: [e.path] });
         break;
@@ -93,6 +107,7 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
             t = { type: 'tool', key, id: u.toolCallId, title: 'Tool', kind: 'other', status: 'pending', content: [], locations: [] };
             tools.set(u.toolCallId, t);
             items.push(t);
+            turnTools.push(t);
           }
           if (u.title) t.title = cleanTitle(u.title);
           if (u.kind) t.kind = u.kind;
@@ -108,8 +123,26 @@ export function fold(entries: LoggedEvent[]): { items: Item[]; pending: Item[]; 
       }
     }
   }
+  // summarise each turn now that every tool call has its final status
+  for (const { item, tools: ts, writes } of turnEnds) item.work = turnWork(ts, writes);
   // permissions that arrived before their tool card was known
   for (const it of items) if (it.type === 'permission' && !it.tool) it.tool = tools.get(it.toolCall?.toolCallId);
   const pending = items.filter((i) => (i.type === 'permission' || i.type === 'elicitation') && !i.resolved);
   return { items, pending, busySince, totals };
+}
+
+const EDIT_KINDS = new Set(['edit', 'delete', 'move']);
+
+/** Commands a turn ran (with their final status) and the files it changed, from its tool calls and ACP file writes. */
+export function turnWork(tools: ToolItem[], writes: string[]): TurnWork {
+  const commands = tools.filter((t) => t.kind === 'execute').map((t) => ({ title: t.title, status: t.status }));
+  const files: string[] = [];
+  const add = (p: unknown) => { if (typeof p === 'string' && p && !files.includes(p)) files.push(p); };
+  for (const t of tools) {
+    if (!EDIT_KINDS.has(t.kind)) continue;
+    for (const l of t.locations) add(l.path);
+    for (const c of t.content) if (c?.type === 'diff') add(c.path);
+  }
+  for (const w of writes) add(w);
+  return { commands, files };
 }
