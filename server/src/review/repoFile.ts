@@ -52,3 +52,30 @@ export function readReviewFile(dir: string, repo: string): { change: string; com
     rounds: data.rounds.filter(ok).map((r) => ({ ...r, repo }) as ReviewRound),
   };
 }
+
+/**
+ * Records to store when importing a review file into `change`. Ids already in
+ * use (a change folder copied within the repo carries its source's ids) get a
+ * new one, and the links between comments and rounds follow, so an import can
+ * never overwrite another change's review.
+ */
+export function importRecords(
+  file: { comments: ReviewComment[]; rounds: ReviewRound[] },
+  change: string,
+  taken: { comment: (id: string) => boolean; round: (id: string) => boolean },
+  newId: () => string,
+): { comments: ReviewComment[]; rounds: ReviewRound[] } {
+  const ids = new Map<string, string>();
+  const fresh = (id: string, used: (id: string) => boolean) => {
+    if (!used(id)) return id;
+    let n = newId();
+    while (used(n)) n = newId();
+    return n;
+  };
+  for (const c of file.comments) ids.set(`c:${c.id}`, fresh(c.id, taken.comment));
+  for (const r of file.rounds) ids.set(`r:${r.id}`, fresh(r.id, taken.round));
+  return {
+    comments: file.comments.map((c) => ({ ...c, change, id: ids.get(`c:${c.id}`)!, roundId: c.roundId ? (ids.get(`r:${c.roundId}`) ?? c.roundId) : null })),
+    rounds: file.rounds.map((r) => ({ ...r, change, id: ids.get(`r:${r.id}`)!, commentIds: r.commentIds.map((id) => ids.get(`c:${id}`) ?? id) })),
+  };
+}

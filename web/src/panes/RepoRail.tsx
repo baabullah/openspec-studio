@@ -4,7 +4,7 @@ import {
   Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import type { ChangeStage, ChangeSummary, RepoInfo } from '../../../shared/protocol.ts';
-import { loadRepos, openAddFolder, openArchived, openChange, openSpec, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
+import { loadRepos, openAddFolder, openArchived, openChange, openSpec, setReviewInRepo, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
 import { issueCounts } from '../review/ValidationPanel.tsx';
 import { Badge, Button, Chip, cx, Dialog, IconButton, Menu, MenuItem, timeAgo, useDismiss } from '../lib/ui.tsx';
 
@@ -20,7 +20,7 @@ const STAGES: { id: ChangeStage; label: string; hint: string }[] = [
 const shortPath = (p: string, max = 46) => (p.length > max ? `…${p.slice(-(max - 1))}` : p);
 
 function RepoPicker() {
-  const { repos, repo, roots, reposLoaded } = useStore();
+  const { repos, repo, roots, reposLoaded, reviewInRepo } = useStore();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
@@ -82,6 +82,13 @@ function RepoPicker() {
               className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[13px] text-accent hover:bg-surface-2">
               <FolderPlus size={14} /> Add folder…
             </button>
+            {repo && cur && (
+              <label className="flex cursor-pointer items-start gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] hover:bg-surface-2"
+                title="Write each change's comments and review rounds to openspec/changes/<change>/.studio-review.json, so they can be committed with the branch and stay with the change when it is archived">
+                <input type="checkbox" className="mt-0.5" checked={reviewInRepo} onChange={(e) => setReviewInRepo(e.target.checked)} />
+                <span>Keep review history in <b className="font-medium">{cur.name}</b><span className="block text-[11px] text-muted">as .studio-review.json in each change folder</span></span>
+              </label>
+            )}
           </div>
         </div>
       )}

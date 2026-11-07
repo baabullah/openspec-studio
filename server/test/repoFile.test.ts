@@ -38,3 +38,14 @@ describe('review history file', () => {
     expect(readReviewFile(path.join(dir, 'missing'), REPO)).toBeNull();
   });
 });
+
+describe('importRecords', async () => {
+  const { importRecords } = await import('../src/review/repoFile.ts');
+  it('keeps ids that are free and renames taken ones, links included', () => {
+    let n = 0;
+    const rec = importRecords({ comments: [cm, { ...cm, id: 'c2', roundId: null }], rounds: [done] }, 'add-copy',
+      { comment: (id) => id === 'c1', round: (id) => id === 'r1' }, () => `new${++n}`);
+    expect(rec.comments.map((c) => [c.id, c.change, c.roundId])).toEqual([['new1', 'add-copy', 'new2'], ['c2', 'add-copy', null]]);
+    expect(rec.rounds.map((r) => [r.id, r.change, r.commentIds])).toEqual([['new2', 'add-copy', ['new1']]]);
+  });
+});

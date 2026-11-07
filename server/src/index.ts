@@ -13,7 +13,8 @@ import { Hub } from './acp/hub.ts';
 import * as openspec from './openspec.ts';
 import { hasOpenSpec, safeResolve, STUDIO_DIR, STUDIO_VERSION } from './repos.ts';
 import { addRoot, browse, findRepos, removeRoot, repoPath, reviewInRepo, roots, seedRoots, setReviewInRepo } from './workspace.ts';
-import { readReviewFile, REVIEW_FILE, writeReviewFile } from './review/repoFile.ts';
+import { importRecords, readReviewFile, REVIEW_FILE, writeReviewFile } from './review/repoFile.ts';
+import { randomUUID } from 'node:crypto';
 import { allowedHostnames, hostAllowed, mutationAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
 import { settingsBody, actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
@@ -231,8 +232,9 @@ app.get('/api/review', (c) => {
   if (!comments.list(repo, change).length && !rounds.list(repo, change).length) {
     const file = readReviewFile(openspec.changeDir(abs, change), repo);
     if (file) {
-      for (const cm of file.comments) comments.put({ ...cm, change });
-      for (const r of file.rounds) rounds.put({ ...r, change }, {});
+      const rec = importRecords(file, change, { comment: (id) => !!comments.get(id), round: (id) => !!rounds.get(id) }, () => randomUUID().slice(0, 8));
+      for (const cm of rec.comments) comments.put(cm);
+      for (const r of rec.rounds) rounds.put(r, {});
     }
   }
   return c.json({ comments: comments.list(repo, change), rounds: rounds.list(repo, change) });

@@ -19,8 +19,9 @@ export const api = {
   removeRoot: (path: string) => req<Workspace>('DELETE', '/api/roots', { path }),
   browse: (path?: string | null) => req<BrowseResult>('GET', `/api/browse${path ? `?${q({ path })}` : ''}`),
   init: (repo: string, agent: string) => req<{ ok: boolean; output: string }>('POST', '/api/init', { repo, agent }),
-  changes: (repo: string) => req<{ active: ChangeSummary[]; archived: string[]; specs: SpecSummary[]; workflows: OptionalWorkflow[] }>('GET', `/api/changes?${q({ repo })}`),
+  changes: (repo: string) => req<{ active: ChangeSummary[]; archived: string[]; specs: SpecSummary[]; workflows: OptionalWorkflow[]; reviewInRepo: boolean }>('GET', `/api/changes?${q({ repo })}`),
   archived: (repo: string, name: string) => req<ArchivedChange>('GET', `/api/archived?${q({ repo, name })}`),
+  settings: (repo: string, reviewInRepo: boolean) => req<{ reviewInRepo: boolean }>('POST', '/api/settings', { repo, reviewInRepo }),
   file: (repo: string, path: string) => req<{ content: string }>('GET', `/api/file?${q({ repo, path })}`),
   action: (repo: string, action: LifecycleAction, change?: string, text?: string) =>
     req<{ ok: true }>('POST', '/api/action', { repo, action, change, text }),

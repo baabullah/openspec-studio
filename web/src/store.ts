@@ -35,6 +35,8 @@ interface State {
   specs: SpecSummary[];
   /** optional OpenSpec workflows installed in the repo */
   workflows: OptionalWorkflow[];
+  /** this repo keeps its review history in openspec/changes/<change>/.studio-review.json */
+  reviewInRepo: boolean;
   browse: Browse | null;
   changesLoaded: boolean;
   change: string | null;
@@ -53,7 +55,7 @@ interface State {
 export const useStore = create<State>(() => ({
   // defaultAgent / agent come from /api/config (the server owns DEFAULT_AGENT)
   agents: [], defaultAgent: '', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: '',
-  session: null, events: [], changes: [], archived: [], specs: [], workflows: [], browse: null, changesLoaded: false, change: null, file: null, content: '',
+  session: null, events: [], changes: [], archived: [], specs: [], workflows: [], reviewInRepo: false, browse: null, changesLoaded: false, change: null, file: null, content: '',
   comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false, doneUnseen: false,
 }));
 const set = useStore.setState;
@@ -261,7 +263,7 @@ export async function loadChanges() {
   if (!repo) return;
   const r = await guard(api.changes(repo));
   if (!r || get().repo !== repo) return;
-  set({ changes: r.active, archived: r.archived, specs: r.specs, workflows: r.workflows, changesLoaded: true });
+  set({ changes: r.active, archived: r.archived, specs: r.specs, workflows: r.workflows, reviewInRepo: r.reviewInRepo, changesLoaded: true });
   const { browse } = get();
   if (browse?.kind === 'spec' && !r.specs.some((x) => x.name === browse.name)) set({ browse: null, content: '' });
   if (browse?.kind === 'archived' && !r.archived.includes(browse.name)) set({ browse: null, content: '' });
@@ -313,6 +315,16 @@ export async function openArchivedFile(file: string) {
   if (browse?.kind !== 'archived') return;
   set({ browse: { ...browse, file }, content: '' });
   await reloadFile();
+}
+
+/** Keep (or stop keeping) this repo's review history in the repo. */
+export async function setReviewInRepo(on: boolean) {
+  const repo = get().repo;
+  if (!repo) return;
+  const r = await guard(api.settings(repo, on));
+  if (!r) return;
+  set({ reviewInRepo: r.reviewInRepo });
+  toast(r.reviewInRepo ? 'Review history is now kept in each change folder (.studio-review.json). Commit it to share it.' : 'Review history stays in Studio only.');
 }
 
 /** Open a main spec, read-only. */
