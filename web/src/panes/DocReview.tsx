@@ -15,6 +15,7 @@ import { KINDS, STATUS_META, TO_CHECK } from '../review/kinds.tsx';
 import { lineHintOf, offsetAtPoint, paint, TextModel } from '../review/textModel.ts';
 import { FileDiffCard } from '../review/DiffView.tsx';
 import { ReadOnlyDoc } from './ReadOnlyDoc.tsx';
+import { gwtKeyword, headingKind, markGwt, markRfc } from '../review/specMarkup.tsx';
 import { ArchivedView } from './ArchivedView.tsx';
 import { ValidationPanel } from '../review/ValidationPanel.tsx';
 import { artifactOfFile, StalePanel } from '../review/StalePanel.tsx';
@@ -42,13 +43,20 @@ const textOfChildren = (c: ReactNode): string => (typeof c === 'string' ? c : Ar
 
 const Doc = memo(function Doc({ content, onReact }: { content: string; onReact: (k: CommentKind, el: HTMLElement) => void }) {
   const components = useMemo<Components>(() => {
-    const wrap = (Tag: any) => ({ node, children, ...rest }: any) => (
-      <Tag {...rest} data-blk data-line={node?.position?.start.line}
-        data-delta={/^h[1-6]$/.test(Tag) ? textOfChildren(children).match(DELTA)?.[1] : undefined}>
-        {children}
-        <ReactionBar onPick={onReact} />
-      </Tag>
-    );
+    // spec-aware markup only wraps text in spans, so comment anchoring sees the same text
+    const wrap = (Tag: any) => ({ node, children, ...rest }: any) => {
+      const isHeading = /^h[1-6]$/.test(Tag);
+      const head = isHeading ? headingKind(children) : { kind: undefined, children };
+      const kw = Tag === 'li' ? gwtKeyword(children) : undefined;
+      const body = Tag === 'p' || Tag === 'li' ? markRfc(markGwt(head.children, kw)) : head.children;
+      return (
+        <Tag {...rest} data-blk data-line={node?.position?.start.line}
+          data-delta={isHeading ? textOfChildren(children).match(DELTA)?.[1] : undefined} data-kind={head.kind} data-gwt={kw}>
+          {body}
+          <ReactionBar onPick={onReact} />
+        </Tag>
+      );
+    };
     return {
       h1: wrap('h1'), h2: wrap('h2'), h3: wrap('h3'), h4: wrap('h4'), p: wrap('p'), li: wrap('li'), blockquote: wrap('blockquote'),
       pre: ({ node, children, ...rest }: any) => <pre {...rest} data-line={node?.position?.start.line}>{children}</pre>,

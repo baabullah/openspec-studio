@@ -1,10 +1,24 @@
 import type { ReactNode } from 'react';
-import Markdown from 'react-markdown';
+import Markdown, { type Components } from 'react-markdown';
+import { gwtKeyword, headingKind, markGwt, markRfc } from '../review/specMarkup.tsx';
 import remarkGfm from 'remark-gfm';
 import { Lock } from 'lucide-react';
 import { cx } from '../lib/ui.tsx';
 
 export interface Tab { id: string; label: ReactNode }
+
+const DELTA = /^(ADDED|MODIFIED|REMOVED|RENAMED)\b/;
+const text = (c: ReactNode): string => (typeof c === 'string' ? c : Array.isArray(c) ? c.map(text).join('') : '');
+
+// the same spec-aware markup as the review canvas, without the review tools
+const deco = (Tag: any) => ({ node: _node, children, ...rest }: any) => {
+  const isHeading = /^h[1-6]$/.test(Tag);
+  const head = isHeading ? headingKind(children) : { kind: undefined, children };
+  const kw = Tag === 'li' ? gwtKeyword(children) : undefined;
+  const body = Tag === 'p' || Tag === 'li' ? markRfc(markGwt(head.children, kw)) : head.children;
+  return <Tag {...rest} data-delta={isHeading ? text(children).match(DELTA)?.[1] : undefined} data-kind={head.kind} data-gwt={kw}>{body}</Tag>;
+};
+const COMPONENTS: Components = { h2: deco('h2'), h3: deco('h3'), h4: deco('h4'), p: deco('p'), li: deco('li') };
 
 /**
  * A document shown without review tools: main specs and archived changes.
@@ -44,7 +58,7 @@ export function ReadOnlyDoc({ title, badges, tabs, tab, onTab, content, children
       <div className="min-h-0 flex-1 overflow-y-auto">
         {children ?? (
           <div className="mx-auto max-w-[760px] px-8 py-6">
-            <div className="doc"><Markdown remarkPlugins={[remarkGfm]}>{content ?? ''}</Markdown></div>
+            <div className="doc"><Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>{content ?? ''}</Markdown></div>
           </div>
         )}
       </div>

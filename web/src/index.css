@@ -137,3 +137,23 @@ button:disabled { cursor: not-allowed; }
 .doc [data-delta="MODIFIED"] { border-left-color: var(--info); }
 .doc [data-delta="REMOVED"] { border-left-color: var(--bad); }
 .doc [data-delta="RENAMED"] { border-left-color: var(--warn); }
+
+/* Spec structure: requirement and scenario headings, WHEN/THEN steps, RFC 2119 words.
+   Only styling: the markup wraps existing text, so comment anchoring is unaffected. */
+.doc [data-kind="requirement"] { margin-top: 1.5em; padding-top: .7em; border-top: 1px dashed var(--line-strong); }
+.doc .spec-head-kw {
+  display: inline-block; margin-right: .5em; padding: .2em .55em; border-radius: 999px; vertical-align: .2em;
+  font-size: .62em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  background: var(--accent-soft); color: var(--accent);
+}
+.doc [data-kind="scenario"] .spec-head-kw { background: var(--info-soft); color: var(--info); }
+.doc [data-kind="scenario"] + ul { margin-left: .25em; padding-left: 1.3em; border-left: 2px solid var(--line); }
+.doc li[data-gwt] { list-style: none; margin-left: -.6em; }
+.doc .spec-gwt {
+  display: inline-block; min-width: 3.6em; margin-right: .45em; padding: .05em .45em; border-radius: 5px; text-align: center;
+  font-size: .7em; font-weight: 700; letter-spacing: .05em; background: var(--surface-2); color: var(--fg-2);
+}
+.doc li[data-gwt="GIVEN"] .spec-gwt { background: var(--accent-soft); color: var(--accent); }
+.doc li[data-gwt="WHEN"] .spec-gwt { background: var(--info-soft); color: var(--info); }
+.doc li[data-gwt="THEN"] .spec-gwt { background: var(--ok-soft); color: var(--ok); }
+.doc .spec-rfc { font-weight: 700; color: var(--accent); }
