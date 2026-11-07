@@ -83,3 +83,12 @@ describe('installedWorkflows', () => {
     expect(installedWorkflows(other)).toEqual([]);
   });
 });
+
+describe('nextTask', () => {
+  it('finds the first unchecked task', async () => {
+    const { nextTask } = await import('../src/openspec.ts');
+    expect(nextTask('## 1. Impl\n- [x] 1.1 Add the handler\n- [ ] 1.2 Register `GET /x` in **app.js**\n- [ ] 1.3 Test\n')).toBe('1.2 Register GET /x in app.js');
+    expect(nextTask('- [x] done\n* [ ] star bullet')).toBe('star bullet');
+    expect(nextTask('- [x] all done\n')).toBeNull();
+  });
+});

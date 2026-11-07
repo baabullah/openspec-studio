@@ -84,6 +84,8 @@ export interface ChangeSummary {
   validation: ChangeValidation | null;
   /** artifacts written before something they depend on changed */
   stale: StaleArtifact[];
+  /** the first unchecked task in tasks.md, e.g. "1.2 Register the route"; null when none */
+  nextTask: string | null;
 }
 
 /** `id` (e.g. "tasks") may be out of date: `because` (e.g. ["proposal"]) changed after it was written. */

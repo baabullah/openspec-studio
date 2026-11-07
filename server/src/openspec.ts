@@ -167,6 +167,12 @@ function artifactMtime(repoAbs: string, change: string, files: string[], outputP
   return newest;
 }
 
+/** First unchecked "- [ ] …" item in tasks.md, without its markdown. */
+export function nextTask(tasksMd: string): string | null {
+  const m = tasksMd.match(/^\s*[-*]\s+\[ \]\s+(.+)$/m);
+  return m ? m[1].replace(/`/g, '').replace(/\*\*/g, '').trim().slice(0, 200) : null;
+}
+
 export async function listChanges(repoAbs: string, commentsFor: (change: string) => ReviewComment[]): Promise<ChangeSummary[]> {
   if (!fs.existsSync(path.join(repoAbs, 'openspec', 'changes'))) return [];
   const { list, status, validate } = await cliView(repoAbs);
@@ -182,7 +188,9 @@ export async function listChanges(repoAbs: string, commentsFor: (change: string)
     const done = base.artifacts.filter((a) => a.status === 'done');
     const out = new Map(done.map((a) => [a.id, a.outputPath]));
     const stale = computeStaleness(done, (id) => (out.has(id) ? artifactMtime(repoAbs, c.name, files, out.get(id)!) : null));
-    return { ...base, files, openComments: open, stage: stageOf(base, open, reviewed), validation: validation.get(c.name) ?? null, stale };
+    const tasksFile = path.join(changeDir(repoAbs, c.name), 'tasks.md');
+    const next = files.includes('tasks.md') ? nextTask(readDoc(tasksFile) ?? '') : null;
+    return { ...base, files, openComments: open, stage: stageOf(base, open, reviewed), validation: validation.get(c.name) ?? null, stale, nextTask: next };
   });
 }
 

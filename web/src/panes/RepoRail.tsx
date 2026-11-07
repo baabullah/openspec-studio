@@ -175,6 +175,9 @@ function ChangeCard({ c }: { c: ChangeSummary }) {
           <span className="text-[10.5px] tabular-nums text-muted">{c.completedTasks}/{c.totalTasks} tasks</span>
         </div>
       )}
+      {(c.stage === 'ready' || c.stage === 'applying') && c.nextTask && (
+        <div className="mt-1 truncate text-[11px] text-muted" title={`Next task in tasks.md: ${c.nextTask}`}>Next: {c.nextTask}</div>
+      )}
       <div className="mt-2" onClick={(e) => e.stopPropagation()}>
         <div className="flex gap-1.5">
           {c.stage === 'done' && hasVerify && (
@@ -249,7 +252,14 @@ export function RepoRail() {
   const [showArchived, setShowArchived] = useState(false);
   const [showSpecs, setShowSpecs] = useState(false);
   confirmArchive = setArchiveName;
-  const grouped = useMemo(() => STAGES.map((s) => ({ ...s, items: changes.filter((c) => c.stage === s.id) })).filter((g) => g.items.length), [changes]);
+  const [filter, setFilter] = useState('');
+  // newest first within a stage; the filter matches the change name
+  const grouped = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const shown = changes.filter((c) => !q || c.name.toLowerCase().includes(q))
+      .sort((a, b) => b.lastModified.localeCompare(a.lastModified));
+    return STAGES.map((s) => ({ ...s, items: shown.filter((c) => c.stage === s.id) })).filter((g) => g.items.length);
+  }, [changes, filter]);
   const hasOpenSpec = repos.find((r) => r.id === repo)?.openspec;
 
   return (
@@ -265,9 +275,18 @@ export function RepoRail() {
           <div className="px-3 pb-2">
             <Button variant="primary" size="lg" className="w-full" onClick={() => setNewOpen(true)}><Plus size={16} /> New change</Button>
           </div>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-4 pt-1">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 pb-14 pt-1">
             {!changesLoaded && [0, 1].map((i) => <div key={i} className="h-28 animate-pulse rounded-xl border border-line bg-surface" />)}
             {changesLoaded && !changes.length && <div className="px-2 py-6 text-center text-xs text-muted">No active changes yet.</div>}
+            {changes.length >= 4 && (
+              <div className="flex items-center gap-1.5 rounded-lg border border-line bg-surface px-2 py-1">
+                <Search size={13} className="text-muted" />
+                <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter changes…" aria-label="Filter changes"
+                  className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none" />
+                {filter && <button type="button" onClick={() => setFilter('')} title="Clear filter" className="text-muted hover:text-fg"><X size={12} /></button>}
+              </div>
+            )}
+            {changes.length > 0 && !grouped.length && <div className="px-2 py-3 text-center text-xs text-muted">No change matches "{filter}".</div>}
             {grouped.map((g) => (
               <section key={g.id}>
                 <div className="mb-1.5 flex items-baseline gap-2 px-1">
