@@ -24,6 +24,7 @@ export function composeReview(command: string, change: string, list: ReviewComme
     'Rules:',
     '- Edit only what the feedback targets, and keep the artifacts coherent with each other (proposal, specs, design, tasks).',
     '- Do not write implementation code.',
+    '- This feedback is the reviewer\'s confirmation: apply the edits now, without asking for confirmation first.',
     '- Items marked "approved" are confirmed by the reviewer: do not change them unless another item requires it.',
     '',
   ];
