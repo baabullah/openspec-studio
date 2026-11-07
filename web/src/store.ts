@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentInfo, ArchivedChange, ChangeSummary, ClientMsg, SpecSummary, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
+  AgentInfo, ArchivedChange, ChangeSummary, ClientMsg, OptionalWorkflow, SpecSummary, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
 } from '../../shared/protocol.ts';
 import { api } from './lib/api.ts';
 
@@ -33,6 +33,8 @@ interface State {
   changes: ChangeSummary[];
   archived: string[];
   specs: SpecSummary[];
+  /** optional OpenSpec workflows installed in the repo */
+  workflows: OptionalWorkflow[];
   browse: Browse | null;
   changesLoaded: boolean;
   change: string | null;
@@ -51,7 +53,7 @@ interface State {
 export const useStore = create<State>(() => ({
   // defaultAgent / agent come from /api/config (the server owns DEFAULT_AGENT)
   agents: [], defaultAgent: '', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: '',
-  session: null, events: [], changes: [], archived: [], specs: [], browse: null, changesLoaded: false, change: null, file: null, content: '',
+  session: null, events: [], changes: [], archived: [], specs: [], workflows: [], browse: null, changesLoaded: false, change: null, file: null, content: '',
   comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false, doneUnseen: false,
 }));
 const set = useStore.setState;
@@ -259,7 +261,7 @@ export async function loadChanges() {
   if (!repo) return;
   const r = await guard(api.changes(repo));
   if (!r || get().repo !== repo) return;
-  set({ changes: r.active, archived: r.archived, specs: r.specs, changesLoaded: true });
+  set({ changes: r.active, archived: r.archived, specs: r.specs, workflows: r.workflows, changesLoaded: true });
   const { browse } = get();
   if (browse?.kind === 'spec' && !r.specs.some((x) => x.name === browse.name)) set({ browse: null, content: '' });
   if (browse?.kind === 'archived' && !r.archived.includes(browse.name)) set({ browse: null, content: '' });

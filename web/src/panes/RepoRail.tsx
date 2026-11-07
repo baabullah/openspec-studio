@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   Archive, Check, ChevronDown, ChevronRight, Compass, FolderGit2, GitMerge, MessageSquare, MoreHorizontal, Pencil, Play,
-  Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen, ShieldAlert,
+  Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import type { ChangeStage, ChangeSummary, RepoInfo } from '../../../shared/protocol.ts';
 import { loadRepos, openAddFolder, openArchived, openChange, openSpec, removeRoot, runAction, selectRepo, useStore } from '../store.ts';
@@ -137,6 +137,7 @@ let confirmArchive: (name: string) => void = () => {};
 function ChangeCard({ c }: { c: ChangeSummary }) {
   const active = useStore((s) => s.change === c.name);
   const busy = useStore((s) => s.session?.status === 'busy');
+  const hasVerify = useStore((s) => s.workflows.includes('verify'));
   const p = primaryAction(c);
   const pct = c.totalTasks ? Math.round((c.completedTasks / c.totalTasks) * 100) : 0;
   return (
@@ -158,6 +159,8 @@ function ChangeCard({ c }: { c: ChangeSummary }) {
               <MenuItem icon={<Compass />} disabled={busy} onClick={() => { runAction('explore', undefined, `the change "${c.name}"`); close(); }}>Explore with agent</MenuItem>
               <MenuItem icon={<Sparkles />} disabled={busy} onClick={() => { runAction('update', c.name); close(); }}>Check coherence</MenuItem>
               <MenuItem icon={<Play />} disabled={busy} onClick={() => { runAction('apply', c.name); close(); }}>Build (apply)</MenuItem>
+              <MenuItem icon={<ShieldCheck />} disabled={busy || !hasVerify} hint={hasVerify ? undefined : 'not installed'}
+                onClick={() => { runAction('verify', c.name); close(); }}>Verify implementation</MenuItem>
               <MenuItem icon={<GitMerge />} disabled={busy} onClick={() => { runAction('sync', c.name); close(); }}>Sync specs</MenuItem>
               <MenuItem icon={<Archive />} danger disabled={busy} onClick={() => { confirmArchive(c.name); close(); }}>Archive…</MenuItem>
             </>}
@@ -173,9 +176,15 @@ function ChangeCard({ c }: { c: ChangeSummary }) {
         </div>
       )}
       <div className="mt-2" onClick={(e) => e.stopPropagation()}>
-        <Button size="sm" variant={c.stage === 'review' ? 'secondary' : 'primary'} className="w-full" disabled={busy && c.stage !== 'review'} onClick={p.run}>
-          <p.icon size={13} /> {p.label}
-        </Button>
+        <div className="flex gap-1.5">
+          {c.stage === 'done' && hasVerify && (
+            <Button size="sm" className="flex-1" disabled={busy} onClick={() => runAction('verify', c.name)}
+              title="Ask the agent to check the code against the specs, tasks and design before archiving"><ShieldCheck size={13} /> Verify</Button>
+          )}
+          <Button size="sm" variant={c.stage === 'review' ? 'secondary' : 'primary'} className="flex-1" disabled={busy && c.stage !== 'review'} onClick={p.run}>
+            <p.icon size={13} /> {p.label}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -213,6 +222,7 @@ function NewChangeDialog({ open, onClose }: { open: boolean; onClose: () => void
 }
 
 function ArchiveDialog({ name, onClose }: { name: string | null; onClose: () => void }) {
+  const hasVerify = useStore((s) => s.workflows.includes('verify'));
   return (
     <Dialog open={!!name} onClose={onClose} title="Archive change"
       footer={<>
@@ -222,6 +232,11 @@ function ArchiveDialog({ name, onClose }: { name: string | null; onClose: () => 
       <p className="text-[13.5px] text-fg-2">
         The agent checks that <b className="text-fg">{name}</b> is complete, merges its delta specs into the main specs, and moves it to
         <code className="mx-1 rounded bg-surface-2 px-1 font-mono text-xs">openspec/changes/archive/</code>.
+      </p>
+      <p className="mt-2 text-[12.5px] text-muted">
+        {hasVerify
+          ? 'Tip: run Verify first, so the agent checks the code against the specs and tasks before the change is archived.'
+          : <>Tip: OpenSpec's optional <b>verify</b> workflow checks the code against the specs before archiving. Enable it with <code className="rounded bg-surface-2 px-1 font-mono text-xs">openspec config profile</code>, then run <code className="rounded bg-surface-2 px-1 font-mono text-xs">openspec update</code> in the repo.</>}
       </p>
     </Dialog>
   );
