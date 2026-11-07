@@ -120,7 +120,8 @@ export function PermissionCard({ it, compact }: { it: Extract<Item, { type: 'per
       <div className="flex items-start gap-2">
         <ShieldAlert size={16} className="mt-0.5 shrink-0 text-warn" />
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-semibold">The agent wants to: {title}</div>
+          {/* a command as title has no spaces to wrap at, and repeats the details below: wrap anywhere, cap at 3 lines */}
+          <div className="line-clamp-3 text-[13px] font-semibold [overflow-wrap:anywhere]" title={String(title)}>The agent wants to: {title}</div>
           {/* the details scroll on their own, so a long command (e.g. a heredoc) can never push the buttons out of view */}
           <div className={cx('overflow-y-auto', compact ? 'max-h-40' : 'max-h-72')}>
             {target && <pre className="mt-0.5 whitespace-pre-wrap break-all font-mono text-[11.5px] text-fg-2">{String(target).slice(0, 20000)}</pre>}
