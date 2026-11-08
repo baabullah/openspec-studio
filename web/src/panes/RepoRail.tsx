@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Archive, Check, ChevronDown, ChevronRight, Compass, FolderGit2, GitMerge, MessageSquare, MoreHorizontal, Pencil, Play,
+  Archive, Check, ChevronDown, ChevronRight, Compass, FolderGit2, GitBranch, GitMerge, MessageSquare, MoreHorizontal, Pencil, Play,
   Plus, RefreshCw, Search, Sparkles, Eye, FolderPlus, X, BookOpen, ShieldAlert, ShieldCheck,
 } from 'lucide-react';
 import type { ChangeStage, ChangeSummary, RepoInfo } from '../../../shared/protocol.ts';
@@ -20,7 +20,7 @@ const STAGES: { id: ChangeStage; label: string; hint: string }[] = [
 const shortPath = (p: string, max = 46) => (p.length > max ? `…${p.slice(-(max - 1))}` : p);
 
 function RepoPicker() {
-  const { repos, repo, roots, reposLoaded, reviewInRepo } = useStore();
+  const { repos, repo, roots, reposLoaded, reviewInRepo, git } = useStore();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false));
@@ -35,6 +35,14 @@ function RepoPicker() {
         <span className="min-w-0 flex-1">
           <span className="block text-[11px] text-muted">Repository</span>
           <span className="block truncate text-[13.5px] font-semibold" title={cur?.id}>{cur?.name ?? 'Choose a repo'}</span>
+          {cur && git?.repo && (
+            <span className={cx('flex items-center gap-1 truncate font-mono text-[11px]', git.onBase || !git.branch ? 'text-warn' : 'text-muted')}
+              title={!git.branch ? 'HEAD is detached: commits will not be on any branch'
+                : git.onBase ? `On ${git.branch}, the main branch: changes and builds land on it directly. Work on a branch per change.`
+                : `Current branch: ${git.branch}`}>
+              <GitBranch size={11} className="shrink-0" /> {git.branch ?? 'detached HEAD'}
+            </span>
+          )}
         </span>
         <ChevronDown size={15} className="text-muted" />
       </button>
@@ -203,6 +211,7 @@ function ChangeCard({ c }: { c: ChangeSummary }) {
 const IDEAS = ['Add a feature: ', 'Fix a bug: ', 'Refactor ', 'Improve performance of ', 'Add tests for '];
 
 function NewChangeDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const git = useStore((s) => s.git);
   const [text, setText] = useState('');
   const [explore, setExplore] = useState(false);
   const go = () => {
@@ -227,6 +236,12 @@ function NewChangeDialog({ open, onClose }: { open: boolean; onClose: () => void
       <div className="mt-2 flex flex-wrap gap-1.5">
         {IDEAS.map((i) => <Chip key={i} onClick={() => setText((t) => (t ? t : i))}>{i.trim()}</Chip>)}
       </div>
+      {git?.onBase && (
+        <p className="mt-3 flex items-start gap-1.5 text-[12px] text-muted">
+          <GitBranch size={13} className="mt-px shrink-0 text-warn" />
+          <span>You are on <b className="font-mono font-medium text-fg-2">{git.branch}</b>. The change is written there unless you create a branch for it first.</span>
+        </p>
+      )}
     </Dialog>
   );
 }

@@ -108,6 +108,17 @@ export interface ArchivedChange {
   historyHidden: boolean;
 }
 
+/** The repo's git state (GET /api/git). Studio only reads it unless you click a git action. */
+export interface GitInfo {
+  /** false: not a git repo (or git is not installed) */
+  repo: boolean;
+  /** checked-out branch; null when HEAD is detached */
+  branch: string | null;
+  /** the branch changes should not land on directly: origin's default, else main/master */
+  base: string | null;
+  onBase: boolean;
+}
+
 /** Studio's version against the newest one on npm (GET /api/update). */
 export interface UpdateInfo {
   current: string;

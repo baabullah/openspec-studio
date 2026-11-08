@@ -3,7 +3,7 @@ import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
   CheckCheck, FileText, FolderPlus, GitCompareArrows, ListTodo, MessageSquarePlus, Send, Sparkles, Eye, EyeOff, Layers,
-  Play, BookOpen,
+  Play, BookOpen, GitBranch,
 } from 'lucide-react';
 import type { CommentKind, ReviewComment } from '../../../shared/protocol.ts';
 import { locate } from '../../../shared/anchor.ts';
@@ -333,6 +333,25 @@ function ReviewBar({ onGeneral }: { onGeneral: (scope: 'doc' | 'change') => void
   );
 }
 
+// ---- git ----------------------------------------------------------------------------
+/** On the main branch: say so before the change and its build land there. */
+function BranchBanner({ change }: { change: string }) {
+  const git = useStore((s) => s.git);
+  const [hidden, setHidden] = useState<string | null>(null);
+  const key = `${git?.branch}:${change}`;
+  if (!git?.onBase || hidden === key) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-warn/30 bg-warn-soft px-6 py-2 text-[13px]">
+      <GitBranch size={15} className="shrink-0 text-warn" />
+      <span className="min-w-0 flex-1">
+        You are on <b className="font-mono font-medium">{git.branch}</b>: this change, and the code when you build it, land there directly.
+        A branch per change keeps {git.branch} clean, e.g. <code className="rounded bg-surface px-1 font-mono text-xs">git switch -c change/{change}</code>.
+      </span>
+      <Button size="sm" variant="ghost" onClick={() => setHidden(key)}>Dismiss</Button>
+    </div>
+  );
+}
+
 // ---- pane ---------------------------------------------------------------------------
 export function DocReview() {
   const { repo, repos, roots, reposLoaded, changes, change, file, rounds, agents, agent, comments, browse, specs, content } = useStore();
@@ -404,6 +423,7 @@ export function DocReview() {
           ))}
         </div>
       </header>
+      <BranchBanner change={c.name} />
       <ValidationPanel c={c} />
       <StalePanel key={`${repo}:${c.name}`} c={c} />
 

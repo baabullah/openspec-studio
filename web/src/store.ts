@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentInfo, ArchivedChange, ChangeSummary, ClientMsg, OptionalWorkflow, SpecSummary, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
+  AgentInfo, ArchivedChange, ChangeSummary, ClientMsg, GitInfo, OptionalWorkflow, SpecSummary, LifecycleAction, LoggedEvent, RepoInfo, ReviewComment, ReviewRound, RootInfo, ServerMsg, SessionState, Workspace,
 } from '../../shared/protocol.ts';
 import { api } from './lib/api.ts';
 
@@ -38,6 +38,8 @@ interface State {
   /** this repo keeps its review history in openspec/changes/<change>/.studio-review.json */
   reviewInRepo: boolean;
   browse: Browse | null;
+  /** the repo's branch; refreshed on focus, file changes and turn ends */
+  git: GitInfo | null;
   changesLoaded: boolean;
   change: string | null;
   file: string | null; // relative to change dir, or '__changes__' for the diff view
@@ -55,7 +57,7 @@ interface State {
 export const useStore = create<State>(() => ({
   // defaultAgent / agent come from /api/config (the server owns DEFAULT_AGENT)
   agents: [], defaultAgent: '', platform: '', roots: [], reposLoaded: false, repos: [], repo: null, agent: '',
-  session: null, events: [], changes: [], archived: [], specs: [], workflows: [], reviewInRepo: false, browse: null, changesLoaded: false, change: null, file: null, content: '',
+  session: null, events: [], changes: [], archived: [], specs: [], workflows: [], reviewInRepo: false, browse: null, git: null, changesLoaded: false, change: null, file: null, content: '',
   comments: [], rounds: [], focusComment: null, toasts: [], wsUp: false, addFolderOpen: false, doneUnseen: false,
 }));
 const set = useStore.setState;
@@ -119,7 +121,7 @@ function onServer(m: ServerMsg) {
     case 'event':
       set((s) => ({ events: appendEvent(s.events, m.entry) }));
       if (m.entry.event.kind === 'permission' || m.entry.event.kind === 'elicitation') notifyAttention();
-      if (m.entry.event.kind === 'turn_end') notifyTurnEnd(m.entry.event.stopReason);
+      if (m.entry.event.kind === 'turn_end') { notifyTurnEnd(m.entry.event.stopReason); loadGit(); }
       break;
     case 'artifacts_changed':
       clearTimeout(refreshTimer);
@@ -163,7 +165,8 @@ function notifyTurnEnd(stopReason: string) {
 function askNotificationPermission() {
   try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {}); } catch { /* ignore */ }
 }
-if (typeof window !== 'undefined') window.addEventListener('focus', () => { if (get().doneUnseen) set({ doneUnseen: false }); });
+// back from a terminal or git client: the branch may have changed
+if (typeof window !== 'undefined') window.addEventListener('focus', () => { if (get().doneUnseen) set({ doneUnseen: false }); loadGit(); });
 
 // ---- actions -------------------------------------------------------------------
 let booted = false;
@@ -208,7 +211,7 @@ export async function removeRoot(path: string) {
 export function selectRepo(id: string) {
   ls.set('repo', id);
   const agent = ls.get(`agent:${id}`) || get().defaultAgent;
-  set({ repo: id, agent, session: null, events: [], changes: [], archived: [], specs: [], browse: null, changesLoaded: false, change: null, file: null, content: '', comments: [], rounds: [] });
+  set({ repo: id, agent, session: null, events: [], changes: [], archived: [], specs: [], browse: null, git: null, changesLoaded: false, change: null, file: null, content: '', comments: [], rounds: [] });
   wsSend({ type: 'subscribe', repo: id });
   loadChanges();
 }
@@ -261,6 +264,7 @@ export async function initRepo() {
 export async function loadChanges() {
   const repo = get().repo;
   if (!repo) return;
+  loadGit();
   const r = await guard(api.changes(repo));
   if (!r || get().repo !== repo) return;
   set({ changes: r.active, archived: r.archived, specs: r.specs, workflows: r.workflows, reviewInRepo: r.reviewInRepo, changesLoaded: true });
@@ -269,6 +273,14 @@ export async function loadChanges() {
   if (browse?.kind === 'archived' && !r.archived.includes(browse.name)) set({ browse: null, content: '' });
   const { change } = get();
   if (change && !r.active.some((c) => c.name === change)) set({ change: null, file: null, content: '' });
+}
+
+/** The repo's branch (quietly: no toast when git is missing). */
+export async function loadGit() {
+  const repo = get().repo;
+  if (!repo) return;
+  const g = await api.git(repo).catch(() => null);
+  if (get().repo === repo) set({ git: g });
 }
 
 export async function openChange(name: string, file?: string) {

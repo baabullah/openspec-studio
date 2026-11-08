@@ -16,6 +16,7 @@ import { addRoot, browse, findRepos, removeRoot, repoPath, reviewInRepo, roots, 
 import { importRecords, readReviewFile, REVIEW_FILE, writeReviewFile } from './review/repoFile.ts';
 import { randomUUID } from 'node:crypto';
 import { updateInfo } from './updates.ts';
+import { gitInfo } from './git.ts';
 import { allowedHostnames, hostAllowed, mutationAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
 import { settingsBody, actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
@@ -117,6 +118,12 @@ app.get('/api/config', (c) => c.json({
   defaultAgent: DEFAULT_AGENT, platform: process.platform, version: STUDIO_VERSION,
   agents: agents().map(({ id, label, openspecTool }) => ({ id, label, openspecTool })),
 }));
+
+// branch and friends; read-only (git actions are separate POSTs)
+app.get('/api/git', async (c) => {
+  const { abs } = repoOf(c);
+  return c.json(await gitInfo(abs));
+});
 
 // a newer Studio on npm (checked at most once a day, see updates.ts)
 app.get('/api/update', async (c) => c.json(await updateInfo()));
