@@ -291,14 +291,22 @@ app.post('/api/review/close', async (c) => {
 // ---- static (production build) ------------------------------------------------
 const WEB_DIST = path.join(STUDIO_DIR, 'web', 'dist');
 if (fs.existsSync(WEB_DIST)) {
-  const rel = path.relative(process.cwd(), WEB_DIST);
-  app.use('/*', serveStatic({ root: rel }));
-  app.get('*', serveStatic({ path: path.join(rel, 'index.html') }));
+  // absolute: the npm package's `openspec-studio` command runs from any folder (or drive)
+  app.use('/*', serveStatic({ root: WEB_DIST }));
+  app.get('*', serveStatic({ path: path.join(WEB_DIST, 'index.html') }));
 }
 
 // ---- WebSocket -----------------------------------------------------------------
-const server = serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () =>
-  console.log(`openspec-studio api on http://${HOST}:${PORT}  (folders: ${roots().map((r) => r.path).join(', ') || 'none yet, add one in the UI'})`));
+const server = serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () => {
+  const folders = roots().map((r) => r.path).join(', ') || 'none yet, add one in the UI';
+  if (fs.existsSync(WEB_DIST)) console.log(`OpenSpec Studio ${STUDIO_VERSION}: open http://${HOST}:${PORT}  (folders: ${folders})`);
+  else console.log(`openspec-studio api on http://${HOST}:${PORT}  (folders: ${folders})`);
+});
+server.on('error', (e: NodeJS.ErrnoException) => {
+  if (e.code !== 'EADDRINUSE') throw e;
+  console.error(`Port ${PORT} is already in use (is Studio already running?). Pick another one: --port <n> or PORT=<n>.`);
+  process.exit(1);
+});
 
 const wss = new WebSocketServer({
   server: server as any,
