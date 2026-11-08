@@ -15,6 +15,7 @@ import { hasOpenSpec, safeResolve, STUDIO_DIR, STUDIO_VERSION } from './repos.ts
 import { addRoot, browse, findRepos, removeRoot, repoPath, reviewInRepo, roots, seedRoots, setReviewInRepo } from './workspace.ts';
 import { importRecords, readReviewFile, REVIEW_FILE, writeReviewFile } from './review/repoFile.ts';
 import { randomUUID } from 'node:crypto';
+import { updateInfo } from './updates.ts';
 import { allowedHostnames, hostAllowed, mutationAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
 import { settingsBody, actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
@@ -116,6 +117,9 @@ app.get('/api/config', (c) => c.json({
   defaultAgent: DEFAULT_AGENT, platform: process.platform, version: STUDIO_VERSION,
   agents: agents().map(({ id, label, openspecTool }) => ({ id, label, openspecTool })),
 }));
+
+// a newer Studio on npm (checked at most once a day, see updates.ts)
+app.get('/api/update', async (c) => c.json(await updateInfo()));
 
 const listRepos = async (refresh = false) => {
   const { repos, truncated } = await findRepos(refresh);
@@ -302,6 +306,7 @@ const server = serve({ fetch: app.fetch, port: PORT, hostname: HOST }, () => {
   if (fs.existsSync(WEB_DIST)) console.log(`OpenSpec Studio ${STUDIO_VERSION}: open http://${HOST}:${PORT}  (folders: ${folders})`);
   else console.log(`openspec-studio api on http://${HOST}:${PORT}  (folders: ${folders})`);
 });
+updateInfo().then((u) => { if (u.newer) console.log(`OpenSpec Studio ${u.latest} is available (you have ${u.current}). Update: ${u.command}`); }).catch(() => {});
 server.on('error', (e: NodeJS.ErrnoException) => {
   if (e.code !== 'EADDRINUSE') throw e;
   console.error(`Port ${PORT} is already in use (is Studio already running?). Pick another one: --port <n> or PORT=<n>.`);

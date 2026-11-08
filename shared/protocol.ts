@@ -108,6 +108,18 @@ export interface ArchivedChange {
   historyHidden: boolean;
 }
 
+/** Studio's version against the newest one on npm (GET /api/update). */
+export interface UpdateInfo {
+  current: string;
+  /** null: not checked (disabled) or the registry could not be reached */
+  latest: string | null;
+  newer: boolean;
+  /** how this copy was installed, which decides the update command */
+  install: 'npm' | 'clone';
+  command: string;
+  disabled: boolean;
+}
+
 export type ChangeStage = 'draft' | 'review' | 'ready' | 'applying' | 'done';
 
 export type LifecycleAction = 'propose' | 'explore' | 'update' | 'apply' | 'verify' | 'sync' | 'archive';

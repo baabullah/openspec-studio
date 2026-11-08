@@ -1,4 +1,4 @@
-import type { AgentInfo, ArchivedChange, BrowseResult, ChangeSummary, OptionalWorkflow, SpecSummary, LifecycleAction, ReviewComment, ReviewRound, Anchor, CommentKind, Workspace } from '../../../shared/protocol.ts';
+import type { AgentInfo, ArchivedChange, BrowseResult, ChangeSummary, OptionalWorkflow, SpecSummary, LifecycleAction, ReviewComment, ReviewRound, Anchor, CommentKind, UpdateInfo, Workspace } from '../../../shared/protocol.ts';
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
   const r = await fetch(url, {
@@ -14,6 +14,7 @@ const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
 
 export const api = {
   config: () => req<{ platform: string; defaultAgent: string; agents: AgentInfo[] }>('GET', '/api/config'),
+  update: () => req<UpdateInfo>('GET', '/api/update'),
   repos: (refresh = false) => req<Workspace>('GET', `/api/repos${refresh ? '?refresh=1' : ''}`),
   addRoot: (path: string) => req<Workspace>('POST', '/api/roots', { path }),
   removeRoot: (path: string) => req<Workspace>('DELETE', '/api/roots', { path }),
