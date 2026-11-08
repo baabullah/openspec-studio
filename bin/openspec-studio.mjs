@@ -31,6 +31,7 @@ Environment:
   STUDIO_DATA      data folder (default ~/.openspec-studio)
   DEFAULT_AGENT    agent selected by default: codebuddy, claude or codex
   OPENSPEC_BIN     the openspec CLI to run (default: openspec on PATH)
+  STUDIO_NO_UPDATE_CHECK=1   don't check npm for a newer Studio (once a day)
 
 Docs: https://github.com/baabullah/openspec-studio`;
 

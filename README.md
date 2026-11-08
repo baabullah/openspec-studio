@@ -60,6 +60,8 @@ Without Studio, all of this happens through slash commands typed into an agent's
   (addressed / partly / declined / answered) and Studio shows a word-level diff of what it changed.
 - **The agent, live.** The agent runs inside the repo and streams its messages, thoughts, tool calls, plans and file
   writes. Permission requests and questions appear as cards you answer with a click.
+- **Branches and commits, on request.** The current branch is always in view, with a warning on `main`; one click
+  creates a branch for the change, another commits exactly its files. Studio never touches git otherwise.
 - **Nothing lost on reload.** The server owns the agent session, the event log, comments and review rounds, so you can
   close the tab, reload, or come back later.
 
@@ -112,7 +114,9 @@ Then open the repo menu → **Add folder…** and pick the folder that holds you
 repo up to 4 levels inside it. Folders are saved in `~/.openspec-studio/config.json`; add as many as you like.
 
 `openspec-studio --port 4000` picks another port; `openspec-studio --help` lists the options. Update with
-`npm install -g openspec-studio@latest`; your folders, comments and sessions stay in `~/.openspec-studio`.
+`npm install -g openspec-studio@latest`; your folders, comments and sessions stay in `~/.openspec-studio`. Studio tells
+you when there is a new version: a line at startup, and **Studio x.y.z available** at the bottom left (click it to copy
+the update command; × hides it until the next version).
 
 Want to try it without touching a real repo? `openspec-studio demo-repo ~/studio-demo --tools claude` creates a small
 demo repo with one change ready for review (see [Making a tutorial or demo](#making-a-tutorial-or-demo)).
@@ -377,6 +381,46 @@ document"* and moves to the Notes block.
 
 ---
 
+## Branches and commits
+Studio never runs git on its own: the agent works on whatever branch is checked out, and nothing is committed until you
+commit it. It shows where you are and offers two actions, each one a button you click and confirm.
+
+<img src="docs/git-branch.png" alt="The branch under the repo name, the on-main banner with Create branch, and Commit 2 files in the header">
+
+- **The branch** shows under the repo name, amber when it is the main branch (origin's default, else `main`/`master`)
+  or a detached HEAD. It refreshes when you come back to the window, when files change and after each agent turn.
+- **On the main branch**, an open change shows *"You are on main: this change, and the code when you build it, land
+  there directly"* with **Create branch change/&lt;name&gt;**: a new branch from where you are (`git switch -c`), so the
+  change's files and any other uncommitted work come along. The New change dialog mentions it too.
+- **Commit N files…** in the header of a change commits that change's folder. In the header of an archived change it
+  commits the archive: the folder's move into `changes/archive/` plus the main specs it updated. The dialog lists exactly
+  the files that go in; untick any to leave them out and edit the message. Only those files are committed: whatever
+  else you have staged stays staged. Your git hooks run, and a failing hook shows its output.
+
+  <img src="docs/git-commit.png" alt="Commit dialog: the change's files with checkboxes, and the message" width="560">
+- Both wait while the agent is working, and both are logged in the agent panel. Code is committed the usual way, from
+  your git client (or ask the agent).
+
+A branch per change works well:
+
+| step | where | commit |
+|---|---|---|
+| 1. New change on `main`, then **Create branch change/&lt;name&gt;** (or branch first in git) | Studio | |
+| 2. Review until it reads right | Studio | **Commit** the change: proposal, specs, design, tasks |
+| 3. **Build it** | Studio | your code, from your git client |
+| 4. **Verify**, **Archive**, then open the archived change | Studio | **Commit** the archive |
+| 5. Rebase on `main`, open the PR, merge | git | |
+
+Archiving on the branch, before merging, puts the code and the main spec update in the same PR. Two changes that touch
+the same main spec conflict in `openspec/specs/` at archive time, so archive last, after rebasing.
+
+What to commit: `openspec/specs/`, the change folders (`openspec/changes/<change>/`) and `openspec/changes/archive/`;
+the workflow files `openspec init` installs for your agent (e.g. `.claude/commands/opsx/`) so teammates get the same
+commands; `.studio-review.json` if you keep the review history in the repo (see above). Not `~/.openspec-studio`, which
+lives outside the repo anyway, nor your agent's local settings (e.g. `.claude/settings.local.json`).
+
+---
+
 ## The agent panel
 
 ### Header
@@ -464,7 +508,8 @@ totals of the current session.
 | `~/.openspec-studio/studio.db` | agent session ids (for resume), the event log, comments, review rounds with snapshots and diffs |
 | `~/.openspec-studio/config.json` | the folders you added |
 | `~/.openspec-studio/agents.json` | your custom agents (optional, you write it) |
-| your repo | Nothing by default. With **Keep review history** on: `.studio-review.json` in each reviewed change folder. `openspec init` (when you click Initialize) and the agent write there too. |
+| `~/.openspec-studio/update-check.json` | the newest version on npm and when it was checked (once a day) |
+| your repo | Nothing by default. With **Keep review history** on: `.studio-review.json` in each reviewed change folder. `openspec init` (when you click Initialize) and the agent write there too. Git changes only when you click **Create branch** or **Commit**. |
 
 ### Limits
 - Files larger than 2 MB (`MAX_DOC_BYTES`) are not opened or snapshotted.
@@ -489,6 +534,7 @@ All optional, as environment variables:
 | `OPENSPEC_BIN` | `openspec` | OpenSpec CLI to run |
 | `OPENSPEC_TELEMETRY` | `0` for Studio's own CLI calls | set it to override |
 | `MAX_DOC_BYTES` | `2097152` | largest spec file the server opens or snapshots (bigger ones get a 413 / a marker) |
+| `STUDIO_NO_UPDATE_CHECK` | none | `1` turns off the daily check for a new version on npm |
 
 ## Agents
 | id | how it runs | login | OpenSpec invocation |
@@ -638,6 +684,10 @@ from the same origin, and POST bodies must be JSON. Repos are limited to the fol
 from `<repo>/openspec`, and the agent's ACP file reads/writes are confined to the repo. The agent's own tools (shell
 commands and so on) run with whatever its permission mode allows, so keep an eye on the permission cards. There is no
 authentication: do not expose Studio on a network.
+
+The only request Studio itself makes to the internet is the update check: once a day, `GET
+https://registry.npmjs.org/openspec-studio/latest`, sending nothing but that URL (`STUDIO_NO_UPDATE_CHECK=1` turns it
+off). Agents and `npx` make their own connections.
 
 ## Development
 ```bash
