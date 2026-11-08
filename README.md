@@ -11,7 +11,7 @@ documents Google-Docs style, and watch the coding agent work live, including its
   <img src="docs/review.png" alt="Reviewing a proposal: comments in the margin next to their highlights, the change board on the left, Claude Code on the right">
 </picture>
 
-<sub>Every screenshot in this README comes from a real session: the demo repo from <code>npm run demo-repo</code>, reviewed, built
+<sub>Every screenshot in this README comes from a real session: the demo repo from <code>openspec-studio demo-repo</code>, reviewed, built
 and archived by Claude Code (Sonnet 5.5), well under a dollar in tokens.</sub>
 
 **Contents:**
@@ -104,24 +104,30 @@ npm install -g @fission-ai/openspec
 codebuddy        # or: claude / codex
 
 # 3. Studio
-git clone https://github.com/baabullah/openspec-studio.git
-cd openspec-studio
-npm install
-npm run dev      # API :3940 + web :5173 → open http://127.0.0.1:5173
+npm install -g openspec-studio
+openspec-studio  # → open http://127.0.0.1:3940
 ```
 
 Then open the repo menu → **Add folder…** and pick the folder that holds your repos. Studio lists every git or OpenSpec
 repo up to 4 levels inside it. Folders are saved in `~/.openspec-studio/config.json`; add as many as you like.
 
-For everyday use, run a production build on a single port:
-```bash
-npm run build && npm start   # http://127.0.0.1:3940
-```
-`npm start` runs the TypeScript server through `tsx` (no separate compile step), so keep the dev dependencies installed;
-the startup cost is a second or two and nothing else changes at runtime.
+`openspec-studio --port 4000` picks another port; `openspec-studio --help` lists the options. Update with
+`npm install -g openspec-studio@latest`; your folders, comments and sessions stay in `~/.openspec-studio`.
 
-Want to try it without touching a real repo? `npm run demo-repo -- ~/studio-demo --tools claude` creates a small demo
-repo with one change ready for review (see [Making a tutorial or demo](#making-a-tutorial-or-demo)).
+Want to try it without touching a real repo? `openspec-studio demo-repo ~/studio-demo --tools claude` creates a small
+demo repo with one change ready for review (see [Making a tutorial or demo](#making-a-tutorial-or-demo)).
+
+### From a clone (to work on Studio itself)
+```bash
+git clone https://github.com/baabullah/openspec-studio.git
+cd openspec-studio
+npm install
+npm run dev                  # API :3940 + web :5173 → open http://127.0.0.1:5173
+npm run build && npm start   # or the production build on one port: http://127.0.0.1:3940
+```
+`npm start` runs the TypeScript server through `tsx` (no separate compile step), the same way the npm package does; the
+startup cost is a second or two and nothing else changes at runtime. In a clone, the demo repo is
+`npm run demo-repo -- ~/studio-demo --tools claude`.
 
 ---
 
@@ -524,14 +530,14 @@ This section is for recording a video, taking screenshots or giving a live demo.
 1. **Use a separate data folder** so the demo starts clean and your own folders, comments and sessions stay out of it:
    ```bash
    # macOS / Linux / WSL
-   STUDIO_DATA=~/studio-demo-data npm start
+   STUDIO_DATA=~/studio-demo-data openspec-studio
    # Windows (cmd)
-   set STUDIO_DATA=%USERPROFILE%\studio-demo-data&& npm start
+   set STUDIO_DATA=%USERPROFILE%\studio-demo-data&& openspec-studio
    ```
-   Delete that folder to start over.
+   Delete that folder to start over. (From a clone: the same with `npm start` instead of `openspec-studio`.)
 2. **Create a demo repo** instead of using a real project:
    ```bash
-   npm run demo-repo -- ~/studio-demo --tools claude    # or codebuddy / codex: the agent you will show
+   openspec-studio demo-repo ~/studio-demo --tools claude    # or codebuddy / codex: the agent you will show
    ```
    This creates `~/studio-demo/hello-app`: a tiny HTTP API with **no dependencies** (`node:http`, tests with
    `node:test`, so `npm test` works without `npm install`), a main spec (`health`) and one change,
@@ -541,7 +547,7 @@ This section is for recording a video, taking screenshots or giving a live demo.
    To film the *Initialize OpenSpec* screen as well, create an empty git repo (`git init`) next to it in the same folder.
 3. **Log in to the agent beforehand** and connect it once off-camera: the first connect of Claude Code or Codex
    downloads the adapter and takes a while.
-4. Run the **production build** (`npm run build && npm start`: one port, no dev tooling) and open
+4. Run `openspec-studio` (or, from a clone, the **production build**: `npm run build && npm start`) and open
    `http://127.0.0.1:3940` in a window **at least 1440 px wide** (e.g. 1440×900), so all three columns and the margin
    comments are visible. Narrower, and the comments move into the Notes block above the document.
 5. The theme follows the system; use the toggle at the bottom left to force light or dark.
@@ -583,7 +589,7 @@ the server to show the reconnect badge and the automatic refresh; open the ⋯ m
 
 ### Tips
 - The left rail, the open document and the agent transcript update by themselves; no refresh is needed on camera.
-- The agent's wording, the files it edits and its verdicts vary from run to run. Re-run `npm run demo-repo` (and delete
+- The agent's wording, the files it edits and its verdicts vary from run to run. Re-run `openspec-studio demo-repo` (and delete
   the demo data folder) to retake a scene from the same starting point.
 - Permission prompts depend on the agent's **Mode** dropdown. A mode that asks before edits makes the permission cards
   visible; a more permissive mode makes the build faster to film.
