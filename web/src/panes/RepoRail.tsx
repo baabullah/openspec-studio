@@ -36,11 +36,11 @@ function RepoPicker() {
           <span className="block text-[11px] text-muted">Repository</span>
           <span className="block truncate text-[13.5px] font-semibold" title={cur?.id}>{cur?.name ?? 'Choose a repo'}</span>
           {cur && git?.repo && (
-            <span className={cx('flex items-center gap-1 truncate font-mono text-[11px]', git.onBase || !git.branch ? 'text-warn' : 'text-muted')}
+            <span className={cx('flex min-w-0 items-center gap-1 font-mono text-[11px]', git.onBase || !git.branch ? 'text-warn' : 'text-muted')}
               title={!git.branch ? 'HEAD is detached: commits will not be on any branch'
                 : git.onBase ? `On ${git.branch}, the main branch: changes and builds land on it directly. Work on a branch per change.`
                 : `Current branch: ${git.branch}`}>
-              <GitBranch size={11} className="shrink-0" /> {git.branch ?? 'detached HEAD'}
+              <GitBranch size={11} className="shrink-0" /> <span className="min-w-0 truncate">{git.branch ?? 'detached HEAD'}</span>
             </span>
           )}
         </span>
@@ -239,7 +239,7 @@ function NewChangeDialog({ open, onClose }: { open: boolean; onClose: () => void
       {git?.onBase && (
         <p className="mt-3 flex items-start gap-1.5 text-[12px] text-muted">
           <GitBranch size={13} className="mt-px shrink-0 text-warn" />
-          <span>You are on <b className="font-mono font-medium text-fg-2">{git.branch}</b>. The change is written there unless you create a branch for it first.</span>
+          <span>You are on <b className="font-mono font-medium text-fg-2">{git.branch}</b>. Once the agent has named the change, open it and use <b className="font-medium text-fg-2">Create branch</b> to move it onto its own branch.</span>
         </p>
       )}
     </Dialog>

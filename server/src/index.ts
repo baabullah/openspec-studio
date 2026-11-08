@@ -16,10 +16,10 @@ import { addRoot, browse, findRepos, removeRoot, repoPath, reviewInRepo, roots, 
 import { importRecords, readReviewFile, REVIEW_FILE, writeReviewFile } from './review/repoFile.ts';
 import { randomUUID } from 'node:crypto';
 import { updateInfo } from './updates.ts';
-import { gitInfo } from './git.ts';
+import { commitFiles, createBranch, gitInfo, pendingFiles, scopePaths } from './git.ts';
 import { allowedHostnames, hostAllowed, mutationAllowed, requestAllowed } from './security.ts';
 import { closeRound, closeStaleRounds, createComment, onTurnEnd, patchComment, sendReview } from './review/service.ts';
-import { settingsBody, actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
+import { gitBranchBody, gitCommitBody, settingsBody, actionBody, changeBody, clientMsg, commentCreate, commentPatch, describeIssues, initBody, parseOr400, rootBody } from './schemas.ts';
 import type { z } from 'zod';
 
 // Older versions identified repos by their path relative to a single REPOS_ROOT
@@ -119,10 +119,55 @@ app.get('/api/config', (c) => c.json({
   agents: agents().map(({ id, label, openspecTool }) => ({ id, label, openspecTool })),
 }));
 
-// branch and friends; read-only (git actions are separate POSTs)
+// branch and friends; read-only (git actions are separate POSTs). With ?change= or
+// ?archived=, also the uncommitted files that change's commit would hold.
+type GitScope = { change: string } | { archived: string; change: string };
+const gitScope = (abs: string, q: { change?: string; archived?: string }): GitScope | null => {
+  if (q.archived) {
+    if (!/^[\w.-]+$/.test(q.archived) || !fs.existsSync(openspec.archivedDir(abs, q.archived))) return null;
+    return { archived: q.archived, change: openspec.archivedChangeName(q.archived) };
+  }
+  return validChange(abs, q.change) ? { change: q.change } : null;
+};
 app.get('/api/git', async (c) => {
   const { abs } = repoOf(c);
+  const info = await gitInfo(abs);
+  const scope = info.repo ? gitScope(abs, { change: c.req.query('change'), archived: c.req.query('archived') }) : null;
+  return c.json({ ...info, pending: scope ? (await pendingFiles(abs, scopePaths(scope))).map(({ path, status }) => ({ path, status })) : [] });
+});
+const agentBusy = (repo: string) => hub.get(repo)?.status === 'busy';
+
+// "Create branch change/<name>": from the current HEAD, the change's files come along
+app.post('/api/git/branch', async (c) => {
+  const b = await body(c, gitBranchBody);
+  const { repo, abs } = repoOf(c, b.repo);
+  if (!validChange(abs, b.change)) return c.json({ error: 'unknown change' }, 400);
+  if (agentBusy(repo)) return c.json({ error: 'The agent is still working. Wait for it to finish first.' }, 409);
+  const name = `change/${b.change}`;
+  const r = await createBranch(abs, name);
+  if (!r.ok) return c.json({ error: r.output }, 409);
+  hub.emit(repo, { kind: 'notice', level: 'info', text: `git switch -c ${name}` });
   return c.json(await gitInfo(abs));
+});
+
+// "Commit": exactly the files the user saw, and only files of that change's scope
+app.post('/api/git/commit', async (c) => {
+  const b = await body(c, gitCommitBody);
+  const { repo, abs } = repoOf(c, b.repo);
+  const scope = gitScope(abs, b);
+  if (!scope) return c.json({ error: 'unknown change' }, 400);
+  if (agentBusy(repo)) return c.json({ error: 'The agent is still working. Wait for it to finish first.' }, 409);
+  const pending = await pendingFiles(abs, scopePaths(scope));
+  const wanted = new Set(b.files);
+  const files = pending.filter((f) => wanted.has(f.path));
+  if (!files.length) return c.json({ error: 'Nothing to commit: those files have no changes any more.' }, 409);
+  const r = await commitFiles(abs, files, b.message);
+  if (!r.ok) {
+    hub.emit(repo, { kind: 'notice', level: 'error', text: `git commit failed\n${r.output}` });
+    return c.json({ error: r.output || 'git commit failed' }, 500);
+  }
+  hub.emit(repo, { kind: 'notice', level: 'info', text: `git commit ${r.commit}: ${b.message.split('\n')[0]} (${files.length} file${files.length === 1 ? '' : 's'})` });
+  return c.json({ commit: r.commit, files: files.length });
 });
 
 // a newer Studio on npm (checked at most once a day, see updates.ts)

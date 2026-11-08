@@ -7,7 +7,8 @@ import {
 } from 'lucide-react';
 import type { CommentKind, ReviewComment } from '../../../shared/protocol.ts';
 import { locate } from '../../../shared/anchor.ts';
-import { initRepo, openAddFolder, openFile, review, sendPrompt, setAgent, useStore } from '../store.ts';
+import { createChangeBranch, initRepo, openAddFolder, openFile, review, sendPrompt, setAgent, useStore } from '../store.ts';
+import { CommitButton } from './GitActions.tsx';
 import { Badge, Button, cx, Dialog, Spinner } from '../lib/ui.tsx';
 import { CommentCard } from '../review/CommentCard.tsx';
 import { Composer } from '../review/Composer.tsx';
@@ -337,7 +338,9 @@ function ReviewBar({ onGeneral }: { onGeneral: (scope: 'doc' | 'change') => void
 /** On the main branch: say so before the change and its build land there. */
 function BranchBanner({ change }: { change: string }) {
   const git = useStore((s) => s.git);
+  const busy = useStore((s) => s.session?.status === 'busy');
   const [hidden, setHidden] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
   const key = `${git?.branch}:${change}`;
   if (!git?.onBase || hidden === key) return null;
   return (
@@ -345,8 +348,12 @@ function BranchBanner({ change }: { change: string }) {
       <GitBranch size={15} className="shrink-0 text-warn" />
       <span className="min-w-0 flex-1">
         You are on <b className="font-mono font-medium">{git.branch}</b>: this change, and the code when you build it, land there directly.
-        A branch per change keeps {git.branch} clean, e.g. <code className="rounded bg-surface px-1 font-mono text-xs">git switch -c change/{change}</code>.
+        A branch per change keeps {git.branch} clean.
       </span>
+      <Button size="sm" disabled={busy || working} onClick={async () => { setWorking(true); await createChangeBranch(change); setWorking(false); }}
+        title={busy ? 'Wait for the agent to finish' : `git switch -c change/${change}: a new branch from here; the change's files and any other uncommitted work come along`}>
+        {working ? <Spinner /> : <GitBranch size={13} />} Create branch change/{change}
+      </Button>
       <Button size="sm" variant="ghost" onClick={() => setHidden(key)}>Dismiss</Button>
     </div>
   );
@@ -410,6 +417,10 @@ export function DocReview() {
           <h1 className="truncate text-[17px] font-semibold tracking-tight">{c.name}</h1>
           {tasksDone && <Badge tone="ok"><ListTodo size={12} /> {tasksDone} tasks</Badge>}
           {c.openComments > 0 && <Badge tone="warn">{c.openComments} open comments</Badge>}
+          <span className="ml-auto shrink-0">
+            <CommitButton key={c.name} what={c.name}
+              defaultMessage={c.stage === 'applying' || c.stage === 'done' ? `Update ${c.name} tasks and artifacts` : `Spec for ${c.name}: proposal, specs, design and tasks`} />
+          </span>
         </div>
         <div className="mt-2 flex gap-0.5 overflow-x-auto">
           {tabs.map((f) => (

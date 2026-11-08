@@ -117,7 +117,10 @@ export interface GitInfo {
   /** the branch changes should not land on directly: origin's default, else main/master */
   base: string | null;
   onBase: boolean;
+  /** uncommitted files of the change asked about (?change= / ?archived=) */
+  pending?: GitPendingFile[];
 }
+export interface GitPendingFile { path: string; status: 'added' | 'modified' | 'deleted' | 'renamed' }
 
 /** Studio's version against the newest one on npm (GET /api/update). */
 export interface UpdateInfo {

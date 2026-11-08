@@ -15,7 +15,11 @@ const q = (o: Record<string, string>) => new URLSearchParams(o).toString();
 export const api = {
   config: () => req<{ platform: string; defaultAgent: string; agents: AgentInfo[] }>('GET', '/api/config'),
   update: () => req<UpdateInfo>('GET', '/api/update'),
-  git: (repo: string) => req<GitInfo>('GET', `/api/git?${q({ repo })}`),
+  git: (repo: string, scope: { change?: string; archived?: string } = {}) =>
+    req<GitInfo>('GET', `/api/git?${q({ repo, ...(scope.change ? { change: scope.change } : {}), ...(scope.archived ? { archived: scope.archived } : {}) })}`),
+  gitBranch: (repo: string, change: string) => req<GitInfo>('POST', '/api/git/branch', { repo, change }),
+  gitCommit: (b: { repo: string; change?: string; archived?: string; files: string[]; message: string }) =>
+    req<{ commit: string; files: number }>('POST', '/api/git/commit', b),
   repos: (refresh = false) => req<Workspace>('GET', `/api/repos${refresh ? '?refresh=1' : ''}`),
   addRoot: (path: string) => req<Workspace>('POST', '/api/roots', { path }),
   removeRoot: (path: string) => req<Workspace>('DELETE', '/api/roots', { path }),

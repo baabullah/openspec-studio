@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { gitInfo, parseBranch } from '../src/git.ts';
+import { commitFiles, createBranch, gitInfo, parseBranch, parseStatusZ, pendingFiles, scopePaths } from '../src/git.ts';
 
 // commits in these temp repos need an identity, whatever the machine's git config says
 Object.assign(process.env, { GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com' });
@@ -49,5 +49,83 @@ describe('git info', () => {
     expect(await gitInfo(r.dir)).toMatchObject({ repo: true, branch: null, onBase: false });
     const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-nogit-'));
     expect((await gitInfo(plain)).repo).toBe(false);
+  });
+});
+
+const write = (dir: string, rel: string, text: string) => {
+  fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+  fs.writeFileSync(path.join(dir, rel), text);
+};
+
+describe('git actions', () => {
+  it('parses -z status, renames included', () => {
+    expect(parseStatusZ('?? a b.md\0 M x.md\0 D gone.md\0R  new.md\0old.md\0A  added.md\0')).toEqual([
+      { path: 'a b.md', status: 'added' },
+      { path: 'x.md', status: 'modified' },
+      { path: 'gone.md', status: 'deleted' },
+      { path: 'new.md', status: 'renamed', from: 'old.md' },
+      { path: 'added.md', status: 'added' },
+    ]);
+    expect(parseStatusZ('')).toEqual([]);
+  });
+
+  it("commits only the change's files; the user's other staged work stays staged", async () => {
+    const r = tempRepo();
+    write(r.dir, 'openspec/changes/add-x/proposal.md', '# Why\n');
+    write(r.dir, 'openspec/changes/add-x/specs/greet/spec.md', '## ADDED\n');
+    write(r.dir, 'openspec/changes/other/proposal.md', '# other\n');
+    write(r.dir, 'src/app.js', 'wip\n');
+    r.sh('add', 'src/app.js'); // staged by the user, not part of this commit
+    const pending = await pendingFiles(r.dir, scopePaths({ change: 'add-x' }));
+    expect(pending.map((f) => f.path).sort()).toEqual(['openspec/changes/add-x/proposal.md', 'openspec/changes/add-x/specs/greet/spec.md']);
+    const res = await commitFiles(r.dir, pending, 'Spec for add-x');
+    expect(res.ok).toBe(true);
+    expect(res.commit).toMatch(/^[0-9a-f]{7,}$/);
+    expect(r.sh('show', '--name-only', '--format=%s', 'HEAD').split('\n')).toEqual(['Spec for add-x', '', 'openspec/changes/add-x/proposal.md', 'openspec/changes/add-x/specs/greet/spec.md']);
+    expect(r.sh('diff', '--cached', '--name-only')).toBe('src/app.js');
+    expect(r.sh('status', '--porcelain', '--', 'openspec/changes/other')).toBe('?? openspec/changes/other/');
+    expect(await pendingFiles(r.dir, scopePaths({ change: 'add-x' }))).toEqual([]);
+  });
+
+  it('an archive commit holds the move and the main spec update', async () => {
+    const r = tempRepo();
+    write(r.dir, 'openspec/changes/add-x/proposal.md', '# Why\n');
+    write(r.dir, 'openspec/specs/greet/spec.md', 'v1\n');
+    r.sh('add', '.'); r.sh('commit', '-q', '-m', 'spec');
+    // what `openspec archive` does: move the folder, update the main spec
+    fs.mkdirSync(path.join(r.dir, 'openspec/changes/archive'), { recursive: true });
+    fs.renameSync(path.join(r.dir, 'openspec/changes/add-x'), path.join(r.dir, 'openspec/changes/archive/2026-11-08-add-x'));
+    write(r.dir, 'openspec/specs/greet/spec.md', 'v2\n');
+    write(r.dir, 'notes.txt', 'unrelated\n');
+    const pending = await pendingFiles(r.dir, scopePaths({ archived: '2026-11-08-add-x', change: 'add-x' }));
+    expect(pending.map((f) => `${f.status} ${f.path}`).sort()).toEqual([
+      'added openspec/changes/archive/2026-11-08-add-x/proposal.md',
+      'deleted openspec/changes/add-x/proposal.md',
+      'modified openspec/specs/greet/spec.md',
+    ]);
+    expect((await commitFiles(r.dir, pending, 'Archive add-x')).ok).toBe(true);
+    expect(r.sh('status', '--porcelain')).toBe('?? notes.txt');
+  });
+
+  it('creates change branches, refuses an existing or invalid name', async () => {
+    const r = tempRepo();
+    write(r.dir, 'openspec/changes/add-x/proposal.md', '# Why\n');
+    expect((await createBranch(r.dir, 'change/add-x')).ok).toBe(true);
+    expect(r.sh('branch', '--show-current')).toBe('change/add-x');
+    expect(fs.existsSync(path.join(r.dir, 'openspec/changes/add-x/proposal.md'))).toBe(true); // came along
+    const again = await createBranch(r.dir, 'change/add-x');
+    expect(again.ok).toBe(false);
+    expect(again.output).toContain('already exists');
+    expect((await createBranch(r.dir, 'bad..name')).ok).toBe(false);
+  });
+
+  it('reports a failing commit (a hook that rejects it)', async () => {
+    const r = tempRepo();
+    write(r.dir, 'openspec/changes/add-x/proposal.md', '# Why\n');
+    write(r.dir, '.git/hooks/pre-commit', '#!/bin/sh\necho "lint failed" >&2\nexit 1\n');
+    fs.chmodSync(path.join(r.dir, '.git/hooks/pre-commit'), 0o755);
+    const res = await commitFiles(r.dir, await pendingFiles(r.dir, ['openspec/changes/add-x']), 'Spec');
+    expect(res.ok).toBe(false);
+    expect(res.output).toContain('lint failed');
   });
 });

@@ -5,6 +5,7 @@ import { Badge } from '../lib/ui.tsx';
 import { kindOf, STATUS_META } from '../review/kinds.tsx';
 import { FileDiffCard } from '../review/DiffView.tsx';
 import { ReadOnlyDoc } from './ReadOnlyDoc.tsx';
+import { CommitButton } from './GitActions.tsx';
 
 const tabLabel = (f: string) => f.replace(/\.md$/, '').replace(/^specs\//, 'spec: ').replace(/\/spec$/, '');
 const archivedOn = (name: string) => name.match(/^(\d{4}-\d{2}-\d{2})-/)?.[1] ?? null;
@@ -20,7 +21,8 @@ export function ArchivedView({ name, file, data }: { name: string; file: string;
   ];
   return (
     <ReadOnlyDoc title={data.change} tabs={tabs} tab={file} onTab={openArchivedFile} content={content}
-      badges={<><Badge><Archive size={12} /> archived{date ? ` ${date}` : ''}</Badge><span className="truncate font-mono text-[11.5px] text-muted" title={`openspec/changes/archive/${name}`}>{name}</span></>}>
+      badges={<><Badge><Archive size={12} /> archived{date ? ` ${date}` : ''}</Badge><span className="truncate font-mono text-[11.5px] text-muted" title={`openspec/changes/archive/${name}`}>{name}</span>
+        <CommitButton key={name} what={`the archive of ${data.change}`} defaultMessage={`Archive ${data.change}: move it to the archive and update the main specs`} /></>}>
       {file === HISTORY_TAB ? <HistoryView data={data} /> : undefined}
     </ReadOnlyDoc>
   );

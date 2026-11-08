@@ -20,6 +20,15 @@ export const actionBody = z.object({
   text: capped(4000).optional(),
 });
 export const changeBody = z.object({ repo, change: z.string() });
+export const gitBranchBody = z.object({ repo, change: z.string() });
+/** an active change, or an archived one (its folder name under changes/archive) */
+export const gitCommitBody = z.object({
+  repo,
+  change: z.string().optional(),
+  archived: z.string().optional(),
+  files: z.array(z.string()).min(1).max(2000),
+  message: z.string().trim().min(1).max(5000),
+});
 export const settingsBody = z.object({ repo, reviewInRepo: z.boolean() });
 
 const anchor = z.object({

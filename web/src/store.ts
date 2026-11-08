@@ -275,18 +275,46 @@ export async function loadChanges() {
   if (change && !r.active.some((c) => c.name === change)) set({ change: null, file: null, content: '' });
 }
 
-/** The repo's branch (quietly: no toast when git is missing). */
+/** What the open view would commit: the active change, or the archived one. */
+const gitScope = () => {
+  const { change, browse } = get();
+  return browse?.kind === 'archived' ? { archived: browse.name } : change ? { change } : {};
+};
+
+/** The repo's branch and the open change's uncommitted files (quietly: no toast when git is missing). */
 export async function loadGit() {
   const repo = get().repo;
   if (!repo) return;
-  const g = await api.git(repo).catch(() => null);
-  if (get().repo === repo) set({ git: g });
+  const scope = gitScope();
+  const g = await api.git(repo, scope).catch(() => null);
+  if (get().repo === repo && JSON.stringify(gitScope()) === JSON.stringify(scope)) set({ git: g });
+}
+
+/** "Create branch change/<name>": the change's files come along to the new branch. */
+export async function createChangeBranch(change: string) {
+  const repo = get().repo;
+  if (!repo) return;
+  const g = await guard(api.gitBranch(repo, change));
+  if (!g) return;
+  toast(`Switched to the new branch ${g.branch}`);
+  await loadGit();
+}
+
+/** Commit the files the user confirmed, for the open change (or archived change). */
+export async function commitChange(files: string[], message: string): Promise<boolean> {
+  const repo = get().repo;
+  if (!repo) return false;
+  const r = await guard(api.gitCommit({ repo, ...gitScope(), files, message }));
+  await loadGit();
+  if (!r) return false;
+  toast(`Committed ${r.files} file${r.files === 1 ? '' : 's'} (${r.commit})`);
+  return true;
 }
 
 export async function openChange(name: string, file?: string) {
   const c = get().changes.find((x) => x.name === name);
   set({ browse: null, change: name, file: file ?? c?.files[0] ?? null, content: '', focusComment: null });
-  await Promise.all([reloadFile(), loadReview()]);
+  await Promise.all([reloadFile(), loadReview(), loadGit()]);
 }
 
 export async function openFile(file: string) {
@@ -318,7 +346,7 @@ export async function openArchived(name: string) {
   const data = await guard(api.archived(repo, name));
   if (!data || get().repo !== repo) return;
   set({ browse: { kind: 'archived', name, file: data.files[0] ?? HISTORY_TAB, data }, change: null, file: null, content: '', comments: [], rounds: [], focusComment: null });
-  await reloadFile();
+  await Promise.all([reloadFile(), loadGit()]);
 }
 
 /** Switch the tab of an open archived change. */
