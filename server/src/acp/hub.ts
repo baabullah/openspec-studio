@@ -41,6 +41,54 @@ export function toTurnUsage(u: any): TurnUsage | null {
   return { input, output, cacheRead, cacheWrite, thought, total: num(u.totalTokens) ?? input + output + (cacheRead ?? 0) + (cacheWrite ?? 0) };
 }
 
+/**
+ * Token counts of one model request in OpenAI's shape, as CodeBuddy sends them in
+ * `usage_update._meta.usage` (its prompt response has no `usage`). prompt_tokens
+ * includes the cached ones, so input is the uncached rest, like the ACP fields;
+ * reasoning tokens are part of completion_tokens.
+ */
+export function fromOpenAIUsage(u: any): TurnUsage | null {
+  const prompt = num(u?.prompt_tokens), output = num(u?.completion_tokens);
+  if (prompt === null || output === null) return null;
+  const cacheRead = num(u.prompt_tokens_details?.cached_tokens);
+  const input = Math.max(0, prompt - (cacheRead ?? 0));
+  return { input, output, cacheRead, cacheWrite: null, thought: num(u.completion_tokens_details?.reasoning_tokens), total: num(u.total_tokens) ?? prompt + output };
+}
+
+const addNullable = (a: number | null, b: number | null) => (a === null && b === null ? null : (a ?? 0) + (b ?? 0));
+
+/** Sum the per-request usage of one turn; null when there is none. */
+export function sumUsage(list: Iterable<TurnUsage>): TurnUsage | null {
+  let sum: TurnUsage | null = null;
+  for (const u of list) {
+    sum = !sum ? { ...u } : {
+      input: sum.input + u.input, output: sum.output + u.output, total: sum.total + u.total,
+      cacheRead: addNullable(sum.cacheRead, u.cacheRead), cacheWrite: addNullable(sum.cacheWrite, u.cacheWrite), thought: addNullable(sum.thought, u.thought),
+    };
+  }
+  return sum;
+}
+
+/**
+ * Collects the per-request usage an agent reports during a turn. The same request can
+ * be reported more than once, so entries are keyed by message (or request) id and the
+ * latest report wins.
+ */
+export class TurnUsageMeter {
+  private requests = new Map<string, TurnUsage>();
+  private anon = 0;
+  reset() { this.requests.clear(); }
+  /** Record a `usage_update`; ignored when it carries no per-request usage. */
+  add(update: any) {
+    const meta = update?._meta;
+    const u = fromOpenAIUsage(meta?.usage);
+    if (!u) return;
+    const key = meta['codebuddy.ai/messageId'] ?? meta['codebuddy.ai/requestId'] ?? `#${this.anon++}`;
+    this.requests.set(String(key), u);
+  }
+  total(): TurnUsage | null { return sumUsage(this.requests.values()); }
+}
+
 /** Corporate shells often only export lowercase proxy vars; mirror them so every HTTP client sees them. */
 function agentEnv(extra?: Record<string, string>) {
   const env: Record<string, string | undefined> = { ...process.env, ...extra };
@@ -60,6 +108,7 @@ export class AgentSession {
   private nextInteraction = 1;
   private replaying = false;
   private reply = '';
+  private turnUsage = new TurnUsageMeter();
   private stderrTail: string[] = [];
 
   constructor(
@@ -156,7 +205,12 @@ export class AgentSession {
   private onUpdate(u: any) {
     if (u.sessionUpdate === 'config_option_update') { this.configOptions = flattenConfig(u.configOptions); this.changed(); return; }
     // state, not transcript: it can arrive many times a turn (also while a resumed session replays)
-    if (u.sessionUpdate === 'usage_update') { const c = toContextUsage(u); if (c) { this.context = c; this.changed(); } return; }
+    if (u.sessionUpdate === 'usage_update') {
+      if (this.status === 'busy' && !this.replaying) this.turnUsage.add(u);
+      const c = toContextUsage(u);
+      if (c) { this.context = c; this.changed(); }
+      return;
+    }
     if (this.replaying) return; // history from session/load is already in our event log
     if (['available_commands_update', 'usage_update', 'session_info_update', 'current_mode_update'].includes(u.sessionUpdate)) return;
     if (u.sessionUpdate === 'agent_message_chunk' && u.content?.type === 'text') this.reply += u.content.text;
@@ -203,6 +257,7 @@ export class AgentSession {
     if (this.status !== 'ready') throw new Error(this.status === 'busy' ? 'Agent is still working' : 'Agent is not ready');
     this.status = 'busy';
     this.reply = '';
+    this.turnUsage.reset();
     this.emit({ kind: 'user', text, label });
     this.changed();
     let stopReason = 'error';
@@ -210,7 +265,8 @@ export class AgentSession {
     try {
       const r = await this.conn.agent.request('session/prompt', { sessionId: this.sessionId!, prompt: [{ type: 'text', text }] });
       stopReason = r.stopReason;
-      usage = toTurnUsage((r as any).usage);
+      // the ACP field when the agent sends it (Claude, Codex), else what it reported per request (CodeBuddy)
+      usage = toTurnUsage((r as any).usage) ?? this.turnUsage.total();
     } catch (e: any) {
       this.emit({ kind: 'notice', level: 'error', text: String(e?.message || e) });
     } finally {

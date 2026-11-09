@@ -471,7 +471,11 @@ Studio shows what the agent reports over ACP and nothing it has to guess:
 |---|---|---|---|
 | Claude Code | yes | yes (USD) | yes |
 | Codex | yes | no | yes |
-| CodeBuddy | yes | no (it reports credits in its own format) | not confirmed |
+| CodeBuddy | yes | no (it reports credits in its own format) | yes (input, cache read, output, thinking; no cache write) |
+
+CodeBuddy does not put usage on the turn itself; it reports each model request in `usage_update` (`_meta.usage`).
+Studio adds those up for the turn, counting each request once. Its context gauge is CodeBuddy's own estimate of what
+the session holds, so it can differ from the input tokens of the last request.
 
 ### Chat
 The box at the bottom sends free-form messages to the agent (Enter sends, Shift+Enter adds a line). Use it to ask about
