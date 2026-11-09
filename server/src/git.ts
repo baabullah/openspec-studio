@@ -5,10 +5,11 @@ import type { GitInfo } from '../../shared/protocol.ts';
 import { runCmd } from './proc.ts';
 
 // no pager, no prompts, no translated messages; paths as-is (-z everywhere)
-const ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' };
+// read the environment per call, not once at import, so later changes (e.g. an identity set by tests) apply
+const env = () => ({ ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0', LC_ALL: 'C' });
 
 export const git = (cwd: string, args: string[], timeout = 15_000) =>
-  runCmd('git', ['-c', 'core.quotepath=off', ...args], { cwd, timeout, env: ENV });
+  runCmd('git', ['-c', 'core.quotepath=off', ...args], { cwd, timeout, env: env() });
 
 /** Branches a change should not land on directly. */
 const BASE_NAMES = ['main', 'master'];
