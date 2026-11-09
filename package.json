@@ -1,6 +1,6 @@
 {
   "name": "openspec-studio",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Review OpenSpec changes like a Google Doc, then let your AI coding agent (Claude Code, Codex, CodeBuddy) build them. A local web app.",
   "keywords": [
     "openspec",
