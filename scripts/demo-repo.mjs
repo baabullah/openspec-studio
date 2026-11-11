@@ -1,6 +1,6 @@
 // Create a small, disposable OpenSpec repo for demos, screenshots and tutorials.
 //
-//   node scripts/demo-repo.mjs [folder] [--tools claude|codebuddy|codex]
+//   node scripts/demo-repo.mjs [folder] [--tools claude|codebuddy|codex|opencode]
 //                                        (folder defaults to ./demo-repos)
 //
 // Makes <folder>/hello-app: a git repo holding a tiny zero-dependency Node HTTP

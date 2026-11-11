@@ -17,7 +17,7 @@ const HELP = `OpenSpec Studio ${version}: review OpenSpec changes like a doc, th
 
 Usage:
   openspec-studio [options]                     start Studio and print its URL
-  openspec-studio demo-repo [folder] [--tools claude|codebuddy|codex]
+  openspec-studio demo-repo [folder] [--tools claude|codebuddy|codex|opencode]
                                                 create a small demo repo to try it on
 
 Options:
@@ -29,7 +29,7 @@ Options:
 
 Environment:
   STUDIO_DATA      data folder (default ~/.openspec-studio)
-  DEFAULT_AGENT    agent selected by default: codebuddy, claude or codex
+  DEFAULT_AGENT    agent selected by default: codebuddy, claude, codex or opencode
   OPENSPEC_BIN     the openspec CLI to run (default: openspec on PATH)
   STUDIO_NO_UPDATE_CHECK=1   don't check npm for a newer Studio (once a day)
 

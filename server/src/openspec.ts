@@ -240,7 +240,9 @@ export function installedWorkflows(repoAbs: string): OptionalWorkflow[] {
     try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       for (const [id, w] of Object.entries(OPTIONAL) as [OptionalWorkflow, (typeof OPTIONAL)[OptionalWorkflow]][]) {
-        if ((e.isDirectory() && e.name === w.skill) || (e.isFile() && e.name === w.command && path.basename(dir) === 'opsx')) found.add(id);
+        // opencode puts its commands flat as opsx-<name>.md; the others in an opsx/ folder
+        const cmd = e.isFile() && (e.name === w.command && path.basename(dir) === 'opsx' || e.name === `opsx-${w.command}`);
+        if ((e.isDirectory() && e.name === w.skill) || cmd) found.add(id);
       }
       if (e.isDirectory() && e.name !== 'node_modules') walk(path.join(dir, e.name), depth + 1);
     }

@@ -76,6 +76,13 @@ describe('installedWorkflows', () => {
     const codex = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-wf-'));
     fs.mkdirSync(path.join(codex, '.codex', 'skills', 'openspec-verify-change'), { recursive: true });
     expect(installedWorkflows(codex)).toEqual(['verify']);
+    // opencode writes its commands flat as opsx-<name>.md
+    const oc = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-wf-'));
+    fs.mkdirSync(path.join(oc, '.opencode', 'commands'), { recursive: true });
+    fs.writeFileSync(path.join(oc, '.opencode', 'commands', 'opsx-apply.md'), '#');
+    expect(installedWorkflows(oc)).toEqual([]);
+    fs.writeFileSync(path.join(oc, '.opencode', 'commands', 'opsx-verify.md'), '#');
+    expect(installedWorkflows(oc)).toEqual(['verify']);
     // a verify.md outside an opsx folder is not it
     const other = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-wf-'));
     fs.mkdirSync(path.join(other, '.github'), { recursive: true });

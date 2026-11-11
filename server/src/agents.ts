@@ -25,11 +25,15 @@ const SKILL: Record<LifecycleAction, string> = {
 };
 const slash = (a: LifecycleAction, args: string) => `/opsx:${a} ${args}`.trim();
 const skill = (a: LifecycleAction, args: string) => `$${SKILL[a]} ${args}`.trim();
+// opencode: `opencode acp` lists its OpenSpec commands as opsx-<action> (verified against openspec 1.18)
+const dashed = (a: LifecycleAction, args: string) => `/opsx-${a} ${args}`.trim();
 
 const BUILTIN: AgentDef[] = [
   { id: 'codebuddy', label: 'CodeBuddy', openspecTool: 'codebuddy', cmd: 'codebuddy', args: ['--acp'], command: slash },
   { id: 'claude', label: 'Claude Code', openspecTool: 'claude', cmd: 'npx', args: ['-y', '@agentclientprotocol/claude-agent-acp@0.100.0'], command: slash },
   { id: 'codex', label: 'Codex', openspecTool: 'codex', cmd: 'npx', args: ['-y', '@agentclientprotocol/codex-acp@2.5.0'], command: skill },
+  // its model (e.g. opencode/big-pickle) is chosen in the agent panel; it arrives as a config option
+  { id: 'opencode', label: 'opencode', openspecTool: 'opencode', cmd: 'opencode', args: ['acp'], command: dashed },
 ];
 
 /**

@@ -103,7 +103,7 @@ You need **Node.js ≥ 22.13** (Studio uses the built-in `node:sqlite`) and git.
 npm install -g @fission-ai/openspec
 
 # 2. An agent CLI, logged in once from a terminal (see "Agents"), e.g.
-codebuddy        # or: claude / codex
+codebuddy        # or: claude / codex / opencode
 
 # 3. Studio
 npm install -g openspec-studio
@@ -546,8 +546,11 @@ All optional, as environment variables:
 | codebuddy | `codebuddy --acp` | run `codebuddy` once and sign in | `/opsx:<cmd>` |
 | claude | `npx @agentclientprotocol/claude-agent-acp` | sign in to Claude Code (`claude`), or set `ANTHROPIC_API_KEY` | `/opsx:<cmd>` |
 | codex | `npx @agentclientprotocol/codex-acp` | `codex login`, or set `OPENAI_API_KEY` | `$openspec-<skill>` |
+| opencode | `opencode acp` | `opencode auth login` if your provider needs a key. Pick the model (e.g. `opencode/big-pickle`) in the agent panel | `/opsx-<cmd>` |
 
 The Claude and Codex adapters are downloaded by `npx` the first time you connect, so that first start takes a while.
+opencode is started from your own install (`opencode` on the PATH). Its commands are dashed, `/opsx-<cmd>`, and its
+model is one of the options in the agent panel, the same as CodeBuddy's.
 
 How the buttons map to OpenSpec workflows:
 
@@ -587,7 +590,7 @@ This section is for recording a video, taking screenshots or giving a live demo.
    Delete that folder to start over. (From a clone: the same with `npm start` instead of `openspec-studio`.)
 2. **Create a demo repo** instead of using a real project:
    ```bash
-   openspec-studio demo-repo ~/studio-demo --tools claude    # or codebuddy / codex: the agent you will show
+   openspec-studio demo-repo ~/studio-demo --tools claude    # or codebuddy / codex / opencode: the agent you will show
    ```
    This creates `~/studio-demo/hello-app`: a tiny HTTP API with **no dependencies** (`node:http`, tests with
    `node:test`, so `npm test` works without `npm install`), a main spec (`health`) and one change,
