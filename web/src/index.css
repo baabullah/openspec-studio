@@ -74,6 +74,11 @@
   --font-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
 }
 
+/* the three columns: the rail, the document, the agent chat (the chat's width is the user's, see App) */
+:root { --rail-w: 272px; --agent-w: 400px; }
+@media (max-width: 79.99rem) { :root { --rail-w: 230px; --agent-w: 340px; } }
+@media (max-width: 63.99rem) { :root { --rail-w: 210px; --agent-w: 300px; } }
+
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font-sans); font-size: 14px; -webkit-font-smoothing: antialiased; }
 button { cursor: pointer; }

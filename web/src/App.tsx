@@ -9,6 +9,12 @@ import { DocReview } from './panes/DocReview.tsx';
 import { AgentPanel } from './panes/AgentPanel.tsx';
 import { AddFolderDialog } from './panes/Folders.tsx';
 import { ErrorBoundary } from './lib/ErrorBoundary.tsx';
+import { clampAgentWidth, ColumnResizer, readAgentWidth, saveAgentWidth } from './panes/ColumnResizer.tsx';
+
+/** the layout's own agent width (the breakpoints set it), in px */
+const defaultAgentWidth = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--agent-w')) || 400;
+/** the rail's width at this window width (the CSS breakpoints in index.css) */
+const railFor = (vw: number) => (vw < 1024 ? 210 : vw < 1280 ? 230 : 272);
 
 function Toasts() {
   const toasts = useStore((s) => s.toasts);
@@ -59,12 +65,29 @@ export function App() {
   const wsUp = useStore((s) => s.wsUp);
   const repo = useStore((s) => s.repo);
   const change = useStore((s) => s.change);
+  // the chat width the user dragged to (kept as chosen); null keeps the layout's default
+  const [preferred, setPreferred] = useState<number | null>(readAgentWidth);
+  const [vw, setVw] = useState(() => window.innerWidth);
   useEffect(() => { setTheme(initialTheme()); boot(); }, []);
+  useEffect(() => {
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  // the width in effect: the chosen one, kept inside what this window leaves the document; a
+  // window that gets wider again brings the chosen width back
+  const agentW = preferred === null ? null : clampAgentWidth(preferred, vw, railFor(vw));
+  const chooseWidth = (w: number | null) => { setPreferred(w); saveAgentWidth(w); };
   return (
-    <div className="grid h-full grid-cols-[272px_minmax(0,1fr)_400px] max-xl:grid-cols-[230px_minmax(0,1fr)_340px] max-lg:grid-cols-[210px_minmax(0,1fr)_300px]">
+    <div className="grid h-full grid-cols-[var(--rail-w)_minmax(0,1fr)_var(--agent-w)]"
+      style={agentW === null ? undefined : { '--agent-w': `${agentW}px` } as React.CSSProperties}>
       <ErrorBoundary name="Repositories"><RepoRail /></ErrorBoundary>
       <ErrorBoundary name="Review" resetKey={`${repo}|${change}`}><DocReview /></ErrorBoundary>
-      <ErrorBoundary name="Agent panel" resetKey={repo}><AgentPanel /></ErrorBoundary>
+      <div className="relative min-w-0">
+        <ErrorBoundary name="Agent panel" resetKey={repo}><AgentPanel /></ErrorBoundary>
+        <ColumnResizer width={agentW ?? defaultAgentWidth()}
+          onChange={(w) => chooseWidth(w)} onReset={() => chooseWidth(null)} railWidth={() => railFor(window.innerWidth)} />
+      </div>
       <div className="fixed bottom-3 left-3 z-40 flex items-center gap-1">
         <ThemeToggle />
         <UpdatePill />
