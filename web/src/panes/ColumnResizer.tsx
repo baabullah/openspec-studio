@@ -52,7 +52,12 @@ export function ColumnResizer({ width, onChange, onReset, railWidth }: {
     if (frame.current !== null) cancelAnimationFrame(frame.current);
     frame.current = null;
   };
-  useEffect(() => endDrag, []);
+  // unmounting mid-drag must not leave the page without text selection or with a resize cursor
+  useEffect(() => () => {
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+  }, []);
 
   const limits = () => ({ viewport: window.innerWidth, rail: railWidth() });
   const clamp = (w: number) => { const l = limits(); return clampAgentWidth(w, l.viewport, l.rail); };
@@ -90,6 +95,7 @@ export function ColumnResizer({ width, onChange, onReset, railWidth }: {
   const l = limits();
   const max = clampAgentWidth(AGENT_MAX, l.viewport, l.rail);
   return (
+    // biome-ignore lint/a11y/useSemanticElements: a focusable window splitter (WAI-ARIA), not a decorative <hr>
     <div role="separator" aria-orientation="vertical" aria-label="Resize the chat panel" aria-valuenow={width} aria-valuemin={AGENT_MIN} aria-valuemax={max}
       tabIndex={0} title="Drag to resize the chat · double-click to reset"
       onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onKeyDown={key} onDoubleClick={onReset}
