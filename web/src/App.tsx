@@ -83,7 +83,8 @@ export function App() {
       style={agentW === null ? undefined : { '--agent-w': `${agentW}px` } as React.CSSProperties}>
       <ErrorBoundary name="Repositories"><RepoRail /></ErrorBoundary>
       <ErrorBoundary name="Review" resetKey={`${repo}|${change}`}><DocReview /></ErrorBoundary>
-      <div className="relative min-w-0">
+      {/* h-full + min-h-0: the chat scrolls inside its column; a long transcript must not grow the grid row */}
+      <div className="relative h-full min-h-0 min-w-0">
         <ErrorBoundary name="Agent panel" resetKey={repo}><AgentPanel /></ErrorBoundary>
         <ColumnResizer width={agentW ?? defaultAgentWidth()}
           onChange={(w) => chooseWidth(w)} onReset={() => chooseWidth(null)} railWidth={() => railFor(window.innerWidth)} />
